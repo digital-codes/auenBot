@@ -1,8 +1,13 @@
 certifi==2025.11.12
 charset-normalizer==3.4.4
 idna==3.11
+iniconfig==2.3.0
 joblib==1.5.3
 numpy==2.4.0
+packaging==25.0
+pluggy==1.6.0
+Pygments==2.19.2
+pytest==9.0.2
 python-dateutil==2.9.0.post0
 rank-bm25==0.2.2
 RapidFuzz==3.14.3
