@@ -106,7 +106,7 @@ class KnowledgeIndex:
                 best[c.name] = c
 
         out = list(best.values())
-        out.sort(key=lambda x: x.score, reverse=True)
+        out.sort(key=lambda x: (-x.score, x.name.lower()))
         return out[:k]
 
     def find_entity_partial(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
@@ -121,6 +121,11 @@ class KnowledgeIndex:
         q_tokens = set(tokenize_simple(q))
         suggestions: Dict[str, Dict[str, Any]] = {}
 
+        # DE: Für deutsche Komposita (z. B. "Wasserfrosch") reicht Token-Overlap nicht,
+        # weil "wasserfrosch" als ein Token kommt. Deshalb prüfen wir zusätzlich,
+        # ob Query-Tokens als Substring in der Entity vorkommen.
+        q_subtokens = [t for t in q_tokens if len(t) >= 4]
+
         for e in self.entries:
             name = (e.get("Name") or "").strip()
             typ = (e.get("Typ") or "").strip()
@@ -130,25 +135,34 @@ class KnowledgeIndex:
             nm = normalize(name)
             name_tokens = set(tokenize_simple(nm))
 
+            # Match-Signale:
+            # - direkter Substring (ganzer Query-String)
+            # - Token-Overlap (wenn z. B. Query schon "laubfrosch" enthält)
+            # - Subtoken-Overlap (z. B. "frosch" in "wasserfrosch")
+            # - fuzzy partial (für Tippfehler)
             sub = (q in nm)
             tok = bool(q_tokens & name_tokens)
+            sub_tok = any(st in nm for st in q_subtokens)
             pr = fuzz.partial_ratio(q, nm)
 
-            if sub or tok or pr >= 80:
+            if sub or tok or sub_tok or pr >= 75:
                 score = 0.0
                 if sub:
-                    score += 60.0
+                    score += 55.0
                 if tok:
                     score += 20.0
+                if sub_tok:
+                    score += 30.0
                 score += 0.2 * pr
-                score -= 0.1 * max(0, len(nm) - len(q))
+                score -= 0.08 * max(0, len(nm) - len(q))
 
                 prev = suggestions.get(name)
                 if (prev is None) or (score > prev["score"]):
                     suggestions[name] = {"Name": name, "Typ": typ, "score": float(score)}
 
         out = list(suggestions.values())
-        out.sort(key=lambda x: x["score"], reverse=True)
+        # DE: Stabiles Sortieren (Score absteigend, Name aufsteigend) gegen File-Order Bias.
+        out.sort(key=lambda x: (-x["score"], x["Name"].lower()))
         return out[:k]
 
     def keys_for_entity(self, entry: Dict[str, Any]) -> List[str]:

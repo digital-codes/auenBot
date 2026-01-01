@@ -1,5 +1,8 @@
 {
   "entries": [
+    { "Name": "Teichfrosch", "Typ": "Tier", "Lebensraum": "..." },
+    { "Name": "Springfrosch", "Typ": "Tier", "Lebensraum": "..." },
+    { "Name": "Moorfrosch", "Typ": "Tier", "Lebensraum": "..." },
     {
       "Name": "Eisvogel",
       "Typ": "Tier",
