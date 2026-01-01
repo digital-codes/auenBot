@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Optional
+
+from .core.data_loading import load_context_entries, load_intents, load_json
+from .core.intent_index import IntentIndex
+from .core.knowledge_index import KnowledgeIndex
+from .core.llm_client import OpenAICompatClient
+from .core.router import Router
+
+
+def build_router(
+    intents_path: str,
+    context_path: str,
+    config_dir: Optional[str] = None,
+    llm_threshold: float = 0.45,
+) -> Router:
+    """
+    Factory/Builder.
+
+    Hooks:
+      - Konfigurationspfade können extern gesetzt werden.
+      - LLM ist optional (nur wenn API-Key vorhanden).
+
+    DE: Diese Funktion ist der Einstiegspunkt für euer Projekt.
+    """
+    intents = load_intents(intents_path)
+    ctx = load_context_entries(context_path)
+
+    intent_index = IntentIndex(intents)
+    knowledge_index = KnowledgeIndex(ctx)
+
+    cfg_dir = Path(config_dir) if config_dir else (Path(__file__).parent / "config")
+    synonyms = load_json(cfg_dir / "synonyms.json")
+    routing_matrix = load_json(cfg_dir / "routing_matrix.json")
+    key_canon = load_json(cfg_dir / "key_canonicalization.json")
+    intent_gating = load_json(cfg_dir / "intent_gating.json")
+
+    # Optional LLM client (nur wenn ENV/private vorhanden)
+    api_key = None
+    base_url = None
+    chat_model = None
+    embed_model = None
+
+    try:
+        import private as pr  # type: ignore
+        api_key = getattr(pr, "apiKey", None)
+        base_url = getattr(pr, "baseUrl", None)
+        embed_model = getattr(pr, "embMdl", None)
+        chat_model = getattr(pr, "lngMdl", None)
+    except Exception:
+        api_key = os.getenv("OPENAI_API_KEY")
+        base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com")
+        chat_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini")
+        embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+
+    llm = None
+    if api_key:
+        llm = OpenAICompatClient(
+            base_url=base_url or "https://api.openai.com",
+            api_key=api_key,
+            chat_model=chat_model or "gpt-4.1-mini",
+            embed_model=embed_model or "text-embedding-3-small",
+        )
+
+    return Router(
+        intent_index=intent_index,
+        knowledge_index=knowledge_index,
+        synonyms=synonyms,
+        routing_matrix=routing_matrix,
+        key_canonicalization=key_canon,
+        intent_gating=intent_gating,
+        llm_client=llm,
+        llm_fallback_threshold=llm_threshold,
+    )

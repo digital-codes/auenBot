@@ -1,0 +1,8 @@
+{
+  "requires_entity": [
+    "tp_definition"
+  ],
+  "phrase_bias_intents": [
+    "tp_definition"
+  ]
+}
