@@ -48,3 +48,11 @@ def test_pending_slots_flow(router):
     assert rr2.route == "function"
     assert rr2.data["function"] == "opening_hours_eval"
     assert rr2.data["slots"].get("place") in ("nazka", "Nazka")
+
+def test_ambiguous_entity_suggestions(router):
+    # "frosch" sollte mehrere Varianten vorschlagen und nicht still den ersten nehmen
+    rr = router.route("frosch")
+    assert rr.route == "clarify"
+    assert rr.data["type"] == "need_entity"
+    assert "suggestions" in rr.data
+    assert len(rr.data["suggestions"]) >= 2

@@ -214,6 +214,40 @@ class Router:
                 best = fname
         return best if best_hits > 0 else None
 
+
+    def _is_ambiguous_entity_query(self, text: str, ent_cands: List[Any]) -> bool:
+        """
+        Heuristik: Erkenne generische/mehrdeutige Entity-Anfragen.
+
+        DE:
+        - Beispiel: "frosch" passt zu mehreren Einträgen (Teichfrosch, Springfrosch, ...).
+        - In solchen Fällen wollen wir NICHT stillschweigend den ersten Treffer nehmen,
+          sondern eine Auswahl vorschlagen.
+        """
+        if not ent_cands or len(ent_cands) < 2:
+            return False
+
+        tokens = tokenize_simple(text)
+        # sehr kurze / generische Eingaben sind besonders häufig mehrdeutig
+        if len(tokens) <= 2:
+            top = float(ent_cands[0].score)
+            second = float(ent_cands[1].score)
+            # Wenn Scores sehr nah beieinander liegen, ist es wahrscheinlich unklar.
+            if abs(top - second) <= 3.0:
+                return True
+
+            # Zusätzlich: wenn der Query-String als Substring in mehreren Entity-Namen vorkommt
+            t = normalize(text)
+            if t and len(t) >= 4:
+                hits = 0
+                for c in ent_cands[:6]:
+                    if t in normalize(c.name):
+                        hits += 1
+                if hits >= 2:
+                    return True
+
+        return False
+
     # -----------------------------
     # Knowledge routing
     # -----------------------------
@@ -228,7 +262,7 @@ class Router:
         ent_cands = self.kidx.find_entity(
             text,
             min_score=self.mx["confidence"]["entity_fuzzy_min"],
-            k=5,
+            k=10,
             type_hint=type_hint,
         )
         best_ent = ent_cands[0] if ent_cands else None
@@ -245,7 +279,22 @@ class Router:
             if rr:
                 return rr
 
-        # Entity only => Rückfrage nach Key
+        
+        # Mehrdeutige Entity ohne Key: Auswahl statt "erstes Element gewinnt"
+        if best_ent and not best_key and self._is_ambiguous_entity_query(text, ent_cands):
+            # DE: Für die UI lieber kompakte Vorschläge (Top-N).
+            sugg = [{"name": e.name, "type": e.typ, "confidence": e.score} for e in ent_cands[:8]]
+            return RouteResult(
+                route="clarify",
+                data={
+                    "type": "need_entity",
+                    "key": None,
+                    "question": "Meinst du eines davon?",
+                    "suggestions": sugg,
+                },
+            )
+
+# Entity only => Rückfrage nach Key
         if best_ent and not best_key:
             self.state.last_entity_name = best_ent.name
             self.state.last_entity_type = best_ent.typ
@@ -398,10 +447,24 @@ class Router:
                     },
                 )
 
+            
+            # DE: Wenn mehrere Kandidaten sehr ähnlich sind, lieber nachfragen.
+            if self._is_ambiguous_entity_query(entity_query, ent_cands):
+                return RouteResult(
+                    route="clarify",
+                    data={
+                        "type": "need_entity_ambiguous_definition",
+                        "intent_id": best_id,
+                        "intent_name": best_name,
+                        "question": "Meinst du eines davon?",
+                        "suggestions": [{"name": e.name, "type": e.typ, "confidence": e.score} for e in ent_cands[:8]],
+                    },
+                )
+
             gated_entity = {
-                "top": {"name": ent_cands[0].name, "type": ent_cands[0].typ, "confidence": ent_cands[0].score},
-                "candidates": [{"name": e.name, "type": e.typ, "confidence": e.score} for e in ent_cands],
-            }
+                    "top": {"name": ent_cands[0].name, "type": ent_cands[0].typ, "confidence": ent_cands[0].score},
+                    "candidates": [{"name": e.name, "type": e.typ, "confidence": e.score} for e in ent_cands],
+                }
 
         # Intent akzeptieren, wenn Score hoch genug
         if best["score"] >= self.mx["confidence"]["intent_min"]:

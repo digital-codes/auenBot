@@ -10,7 +10,7 @@
   "confidence": {
     "entity_fuzzy_min": 82,
     "key_min": 1,
-    "intent_min": 0.55,
+    "intent_min": 0.45,
     "llm_fallback_topk": 3
   }
 }

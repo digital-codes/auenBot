@@ -31,7 +31,7 @@ def main() -> None:
     intents_path = "../rawData/intents.json"
     context_path = "../rawData/tiere_pflanzen_auen.json"
 
-    router = build_router(intents_path, context_path, llm_threshold=0.35)
+    router = build_router(intents_path, context_path, llm_threshold=0.55)
     dispatcher = DemoDispatcher()
 
     print("Router Demo. Tippe Text (exit zum Beenden).")
