@@ -31,7 +31,20 @@ def main() -> None:
     intents_path = "../rawData/intents.json"
     context_path = "../rawData/tiere_pflanzen_auen.json"
 
-    router = build_router(intents_path, context_path, llm_threshold=0.55)
+    try:
+        import private as pr  # type: ignore
+        private = {
+            "apiKey": getattr(pr, "apiKey", None),
+            "baseUrl": getattr(pr, "baseUrl", None),
+            "embMdl": getattr(pr, "embMdl", None),
+            "lngMdl": getattr(pr, "lngMdl", None),
+        }
+        print("Loaded private config for LLM.")
+    except Exception:
+        print("No private config found for LLM.")
+        private = None
+
+    router = build_router(intents_path, context_path, llm_threshold=0.55, private=private)
     dispatcher = DemoDispatcher()
 
     print("Router Demo. Tippe Text (exit zum Beenden).")

@@ -16,6 +16,7 @@ def build_router(
     context_path: str,
     config_dir: Optional[str] = None,
     llm_threshold: float = 0.45,
+    private: Optional[dict] = None,
 ) -> Router:
     """
     Factory/Builder.
@@ -44,13 +45,12 @@ def build_router(
     chat_model = None
     embed_model = None
 
-    try:
-        import private as pr  # type: ignore
-        api_key = getattr(pr, "apiKey", None)
-        base_url = getattr(pr, "baseUrl", None)
-        embed_model = getattr(pr, "embMdl", None)
-        chat_model = getattr(pr, "lngMdl", None)
-    except Exception:
+    if private:
+        api_key = private.get("apiKey")
+        base_url = private.get("baseUrl")
+        embed_model = private.get("embMdl")
+        chat_model = private.get("lngMdl")
+    else:
         api_key = os.getenv("OPENAI_API_KEY")
         base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com")
         chat_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini")
@@ -64,6 +64,9 @@ def build_router(
             chat_model=chat_model or "gpt-4.1-mini",
             embed_model=embed_model or "text-embedding-3-small",
         )
+        print(f"LLM Client initialized with model {llm.chat_model} / {llm.embed_model}")
+    else:
+        print("No LLM Client initialized (missing API key)")
 
     return Router(
         intent_index=intent_index,
