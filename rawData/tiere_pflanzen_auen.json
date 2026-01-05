@@ -1150,6 +1150,7 @@
     "Verwendung": "Die Vitamin-C-haltigen süß-säuerlichen Beeren werden gerne zur Herstellung von Saft, Sirup, Gelee und Wein verwendet.",
     "Fortpflanzung": "Die Früchte werden in der Regel von Vögeln, wie z.B. Amseln, Drosseln, Staren und Mönchsgrasmücken, aber auch von Säugetieren gefressen und verbreitet.",
     "Name": "Holunder",
+    "Name_alt": "Schwarzer Holunder",
     "Typ": "Pflanze",
     "Links": [
       "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/00_3775_Schwarzer_Hollunder_%28Sambucus_nigra%29.jpg/330px-00_3775_Schwarzer_Hollunder_%28Sambucus_nigra%29.jpg"
@@ -1245,6 +1246,7 @@
     "Verwendung": "Aus der altbekannten Heil- und Nutzpflanze wird Hopfenblütentee und ein Extrakt mit beruhigender und schlaffördernder Wirkung hergestellt. Weibliche Hopfenzapfen werden außerdem zur Bierherstellung genutzt.",
     "Größe": "bis zu sechs Meter",
     "Name": "Hopfen",
+    "Name_alt": "Wilder Hopfen",
     "Typ": "Pflanze"
   },
   {
@@ -1269,6 +1271,7 @@
     "Vorkommen": "Die Schopfige Kreuzblume gedeiht an sonnigen Standorten auf mäßig trockenen, nährstoffarmen Böden mit mäßig wechselnder Feuchtigkeit und bildet eine dünne Pfahlwurzel und ein verzweigtes Rhizom aus.",
     "Größe": "zwischen 5 und 30 cm hoch",
     "Name": "Schopfige Kreuzblume",
+    "Name_alt":"Schopfiges Kreuzblümchen",
     "Typ": "Pflanze",
     "Links": [
       "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Schopfige_Kreuzblume_in_%C3%96sterreich.JPG/330px-Schopfige_Kreuzblume_in_%C3%96sterreich.JPG"
@@ -1439,6 +1442,7 @@
     "Ökologische Bedeutung": "Die Bestäubung der nacht- oder tagblühenden Seerosen erfolgt durch unterschiedliche Insekten.",
     "Genießbarkeit": "Alle Pflanzenteile der einheimischen Weißen Seerose sind giftig.",
     "Name": "Weiße Seerose",
+    "Name_alt": "Seerose",
     "Typ": "Pflanze",
     "Links": [
       "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Nymphaea_alba_in_Duisburg.jpg/330px-Nymphaea_alba_in_Duisburg.jpg"
@@ -1479,6 +1483,7 @@
     "Erkennungsmerkmale": "Nur für kurze Zeit könnt ihr die etwa 30 cm hohen, an der Spitze etwas umgebogenen Blütenstände mit fleischfarbenen bis zartviolett gefärbten Blüten bewundern.",
     "Fortpflanzung": "[Ökologische Bedeutung] Die Blüten werden von Insekten, insbesondere von Hummeln und Bienen, bestäubt, manchmal auch vom Wind.  Die langlebigen Samen werden durch Wind, Wasser und von Ameisen verbreitet.",
     "Name": "Schuppenwurz",
+    "Name_alt": "Gemeine Schuppenwurz",
     "Typ": "Pflanze",
     "Links": [
       "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Lathraea_squamaria_LC0126.jpg/330px-Lathraea_squamaria_LC0126.jpg"

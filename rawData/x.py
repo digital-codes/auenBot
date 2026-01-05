@@ -42,7 +42,11 @@ def findItem(x,y):
     if item.empty:
         item = t[(t.Name.str.lower() == "gemeiner " + x_lower) | (t.Name_alt.str.lower() == "gemeiner " + x_lower)]
     if item.empty:
+        item = t[(t.Name.str.lower() == "gemeine " + x_lower) | (t.Name_alt.str.lower() == "gemeine " + x_lower)]
+    if item.empty:
         item = p[(p.Name.str.lower() == "gemeiner " + x_lower) | (p.Name_alt.str.lower() == "gemeiner " + x_lower)]
+    if item.empty:
+        item = p[(p.Name.str.lower() == "gemeine " + x_lower) | (p.Name_alt.str.lower() == "gemeine " + x_lower)]
 
     if item.empty:
         print("NOT FOUND:", x)
