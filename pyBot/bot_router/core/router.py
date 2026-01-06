@@ -323,7 +323,7 @@ class Router:
             }
             partial = self.kidx.find_entity_partial(text, k=5)
             if partial:
-                data["suggestions"] = [{"name": f"{p['Name']}/{p['Name_alt']}/{p['Name_sci']}", "type": p["Typ"], "score": p["score"]} for p in partial]
+                data["suggestions"] = [{"name": f"{p['Name']}/{p.get('Name_alt','')}/{p.get('Name_sci','')}", "type": p["Typ"], "score": p["score"]} for p in partial]
             return RouteResult(route="clarify", data=data)
 
         # Wenn keine Entity gefunden wurde (WRatio zu streng bei kurzen Queries),
