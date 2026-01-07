@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+#from anyio import Path
+from pathlib import Path
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+# for export
+import joblib
 
 from .text_utils import tokenize_simple
 
@@ -19,15 +23,32 @@ class IntentIndex:
 
     DE: Für euch bewusst "klassisch" (kein Embedding-Zwang), damit lokal testbar.
     """
-    def __init__(self, intents: List[Dict[str, Any]], ranking: Optional[list[str]] = None) -> None:
+    def __init__(self, intents: List[Dict[str, Any]], ranking: Optional[list[str]] = None, index_path: Optional[str] = None) -> None:
         self.intents = intents
         self.intent_ids = [it["id"] for it in intents]
         self.intent_names = [it.get("intent") for it in intents]
         self.intent_docs = [" ".join(it.get("examples", [])) for it in intents]
 
-        self.vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), min_df=1)
-        self.tfidf = self.vectorizer.fit_transform(self.intent_docs)
-
+        if index_path:
+            try:
+                index_path = Path(index_path)
+            except Exception:
+                index_path = None
+        if index_path and index_path.exists():
+            # Lade vorhandenen Index
+            data = joblib.load(index_path)
+            self.vectorizer = data["vectorizer"]
+            self.tfidf = data["tfidf"]
+            print(f"IntentIndex: Loaded existing index from {index_path}.")
+        else:
+            # Erstelle neuen Index
+            print("IntentIndex: Built new index.")
+            self.vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), min_df=1)
+            self.tfidf = self.vectorizer.fit_transform(self.intent_docs)
+            if index_path:
+                self._export_intent_tfidf(index_path)
+                print(f"IntentIndex: Exported index to {index_path}.")
+    
         tokenized = [tokenize_simple(doc) for doc in self.intent_docs]
         if ranking and "bm25" in ranking:
             try:
@@ -38,6 +59,17 @@ class IntentIndex:
                 self.bm25 = None
         else:
             self.bm25 = None
+
+    def _export_intent_tfidf(self, path: str | Path) -> None:
+        joblib.dump(
+            {
+                "format_version": 1,
+                "vectorizer": self.vectorizer,   # fitted TfidfVectorizer
+                "tfidf": self.tfidf,             # CSR matrix
+                "intent_ids": self.intent_ids,   # row mapping
+            },
+            path,
+        )
 
     def topk(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
         qv = self.vectorizer.transform([query])

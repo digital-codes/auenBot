@@ -14,6 +14,7 @@ from .core.router import Router
 def build_router(
     intents_path: str,
     context_path: str,
+    index_path: Optional[str] = "intent_tfidf.joblib",
     config_dir: Optional[str] = None,
     llm_threshold: float = 0.45,
     private: Optional[dict] = None,
@@ -31,7 +32,7 @@ def build_router(
     intents = load_intents(intents_path)
     ctx = load_context_entries(context_path)
 
-    intent_index = IntentIndex(intents,ranking=ranking)
+    intent_index = IntentIndex(intents,ranking=ranking,index_path=index_path)
     knowledge_index = KnowledgeIndex(ctx)
 
     cfg_dir = Path(config_dir) if config_dir else (Path(__file__).parent / "config")

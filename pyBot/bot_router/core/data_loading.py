@@ -27,6 +27,8 @@ def load_intents(path: Union[str, Path]) -> List[Dict[str, Any]]:
             "intent": item.get("intent"),
             "examples": item.get("text") or []
         })
+    # stable ordering for row alignment across languages
+    intents.sort(key=lambda it: str(it.get("id", "")))        
     return intents
 
 
