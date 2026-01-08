@@ -573,9 +573,15 @@ class Router:
         schema_hint = 'Return pure JSON without markdown wrapping like {"decision":"intent|clarify|smalltalk","intent_id":"...","question":"..."}'
         out = self.llm.chat_json("".join(system), user, schema_hint=schema_hint, temperature=0.0)
         print(f"DEBUG - LLM fallback output: {out}")
+
         if out.get("decision") == "intent" and out.get("intent_id") in top_ids:
             intent_name = next((x["intent_name"] for x in intent_top if x["intent_id"] == out["intent_id"]), None)
             return RouteResult(route="intent", data={"candidates":[{"intent_id": out["intent_id"], "intent_name": intent_name, "score": score, "llm": True}]})  
+        # bugfix for granite4 model that returns intent_name instead of intent_id
+        if out.get("decision") == "intent" and out.get("intent_id") in top_names:
+            intent_name = out.get("intent_id")
+            intent_id = next((x["intent_id"] for x in intent_top if x["intent_name"] == out["intent_id"]), None)
+            return RouteResult(route="intent", data={"candidates":[{"intent_id": intent_id, "intent_name": intent_name, "score": score, "llm": True}]})  
         if out.get("decision") == "clarify" and out.get("question"):
             return RouteResult(route="clarify", data={"type": "llm", "question": out["question"]})
         if out.get("decision") == "smalltalk":
