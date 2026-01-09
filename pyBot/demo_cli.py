@@ -69,6 +69,9 @@ def main() -> None:
         print(f"Route: {rr.route}")
         print("Data:", json.dumps(rr.data, ensure_ascii=False, indent=2))
 
+        if rr.route == "empty":
+            print("\nKeine Eingabe erkannt.")
+            
         if rr.route == "intent":
             print("\nIntent detected")
             candidate = rr.data.get("candidates", [{}])[0]

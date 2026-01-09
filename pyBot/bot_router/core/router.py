@@ -108,6 +108,10 @@ class Router:
     # -----------------------------
     def route(self, user_text: str) -> RouteResult:
         text = (user_text or "").strip()
+        
+        if not text or len(text) == 0:
+            return RouteResult(route="empty", data={})
+        
         tnorm = normalize(text)
         tokens = tokenize_simple(text)
 
