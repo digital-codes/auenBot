@@ -154,14 +154,14 @@ def process_state_machine(validated: Dict[str, Any]) -> Dict[str, Any]:
     next_state, cands, trace = sm.step(input_text)
     print("=>", next_state, [(c.state, round(c.probability, 3)) for c in cands])
 
-    intent = [cands[0].state] if cands else ["unknown"]
+    intent = cands[0].state if cands else "unknown"
 
     new_context = sm.get_context()
     new_context["intent"] = intent
     new_context["state"] = next_state
     new_context["session"] = session
     new_context["lang"] = lang
-    new_context["options"] = [{"state": c.state, "probability": c.probability} for c in cands]
+    new_context["options"] = [c.state for c in cands]
     new_context["output"] = "output from state"
     new_context["trace"] = [t.__dict__ for t in trace]
     return {"delay": delay, "context": new_context }
