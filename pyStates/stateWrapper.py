@@ -139,19 +139,25 @@ def process_state_machine(validated: Dict[str, Any]) -> Dict[str, Any]:
             "key" : validated.get("key", None),
             "options" : validated.get("options", []),
             "values"  : validated.get("values", []),
+            "labels"  : validated.get("labels", []),
         }
-        sm.set_context(ctx)
+        # check forced state / intent
         if (validated.get("state", None) is not None) and (validated.get("intent", None) is not None):
             sm.resetTo(validated.get("state", None), ctx)
+        else:
+            sm.set_context(ctx)
 
     repeat = validated.get("repeat", False)
+    # special case: if not repeat and "wait" in input, signal delay
     delay = True if repeat == False  and "wait" in input_text.lower() else False
 
     next_state, cands, trace = sm.step(input_text)
     print("=>", next_state, [(c.state, round(c.probability, 3)) for c in cands])
 
+    intent = [cands[0].state] if cands else ["unknown"]
+
     new_context = sm.get_context()
-    new_context["intent"] = "decoded intent"
+    new_context["intent"] = intent
     new_context["state"] = next_state
     new_context["session"] = session
     new_context["lang"] = lang
