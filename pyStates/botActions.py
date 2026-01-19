@@ -2,10 +2,10 @@ import json
 import os
 
 class BotAction:
-    def __init__(self, name, parameters=None):
-        self.name = name
+    def __init__(self, path, parameters=None):
+        self.path = path
+        self.name = os.path.basename(path)
         self.parameters = parameters or {}
-        path = os.path.join('..', 'rawData', f'{name}.json')
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 loaded = json.load(f)
@@ -30,11 +30,11 @@ class BotAction:
             # collect keys/columns from first record
             first = self.data[0] if self.data else {}
             self.keys = [k for k in first.keys() if not (k.startswith("Name") or k in ['Typ','Gruppe'])]
-            print(f"Loaded data for action '{name}' with {len(self.data)} entries.")
+            print(f"Loaded data for action '{self.name}' with {len(self.data)} entries.")
             print(f"Available keys: {self.keys}")
 
         except FileNotFoundError:
-            raise FileNotFoundError(f"Data file for action '{name}' not found.")
+            raise FileNotFoundError(f"Data file for action '{self.name}' not found.")
         except Exception as e:
             raise RuntimeError(f"Error loading data file '{path}': {e}")
 
@@ -158,7 +158,7 @@ class BotAction:
             return []   
 
 if __name__ == "__main__":
-    action = BotAction("tiere_pflanzen_auen")
+    action = BotAction("../rawData/tiere_pflanzen_auen.json")
     for user_input in ["frosch habitat","fisch", "blume", "wasserfrosch", "auen","magerrasen"]:
         result = action.extract_animal_or_plant(user_input)
         if result:

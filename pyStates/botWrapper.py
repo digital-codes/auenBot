@@ -12,6 +12,7 @@ Features
 
 from __future__ import annotations
 import json
+from timeit import repeat
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,69 @@ from sqlalchemy.orm import declarative_base, Session, sessionmaker
 
 from botIntents import BotIntent
 from botActions import BotAction
+from botLlm import OpenAICompatClient
+from botVectors import load_vectors, query_vectors
+
+try:
+    import private as pr  # type: ignore
+
+    private = {
+        "apiKey": getattr(pr, "apiKey", None),
+        "baseUrl": getattr(pr, "baseUrl", None),
+        "embUrl": getattr(pr, "embUrl", None),
+        "embMdl": getattr(pr, "embMdl", None),
+        "lngMdl": getattr(pr, "lngMdl", None),
+    }
+    print("Loaded private config for LLM.")
+except Exception:
+    print("No private config found for LLM.")
+    private = None
+
+api_key = private.get("apiKey")
+base_url = private.get("baseUrl")
+emb_url = private.get("embUrl", base_url)
+embed_model = private.get("embMdl")
+chat_model = private.get("lngMdl")
+llm = OpenAICompatClient(
+    base_url=base_url,
+    api_key=api_key,
+    emb_url=emb_url,
+    chat_model=chat_model,
+    embed_model=embed_model,
+)
+print(f"LLM Client initialized with model {llm.chat_model} / {llm.embed_model}")
+
+system_prompt_check_intent_de = """Du bist ein Intent‑Klassifizierungssystem für einen Chatbot.
+    "Dir werden Fragen zu Tieren, Pflanzen und natürlichen Lebensräumen in den Karlsruher Rheinauen gestellt.
+    "Ein bestimmtes Biotop wird im Deutschen ‚Aue‘ genannt.
+    "Für den Chatbot sind mehrere Intents definiert.
+    "Basierend auf der Benutzereingabe wählen den am besten passenden Intent aus den bereitgestellten Optionen aus.
+    "Beachten Sie, dass Verweise auf Tiere oder Pflanzen in der Regel nicht mit Ernährung, sondern mit biologischen Aspekten zusammenhängen.
+    "Wenn keiner passt, antworte mit ‚None‘.
+    "Die aktuelle Benutzersprache ist Deutsch."""
+
+system_prompt_check_intent_en = """You are an intent classification system for a chatbot. 
+                        "You will be asked questions about animals, plants and natural habitats in the Karlsruher Rheinauen.
+                        "A particular biotiope is called 'Aue' in German. There are a number of intents defined for the chatbot. 
+                        "Given the user input, select the best matching intent from the provided options. 
+                        "Note that typically reference to animals or plants are not related to nutrition but to biological aspects. 
+                        "If none match, respond with 'None'.
+                        "The current user language is English."""
+
+
+intents_path = "../rawData/intents_translated.json"
+context_path = "../rawData/tiere_pflanzen_auen.json"
+vectors_path = "../rawData/intent_vectors.json"
+
+intents = BotIntent(intents_path)
+print(f"Loaded intent '{intents.name}' with {len(intents.data)} entries.")
+for i in intents.data[:5]:
+    print(i["intent_de"])
+
+actions = BotAction(context_path)
+
+vectors, vector_intents = load_vectors(vectors_path)
+print(f"Loaded {len(vectors)} intent vectors from {vectors_path}.")
 
 # ----------------------------------------------------------------------
 # 0️⃣ Flask app
@@ -83,14 +147,16 @@ class HistoryRecord(Base):
     __tablename__ = "history"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    received_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    received_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
     # input field
     input = Column(Text, nullable=False)
 
     # output field
     output = Column(Text, nullable=True)
-    
+
     # Store the raw JSON context for audit / debugging
     context = Column(Text, nullable=True)
 
@@ -102,7 +168,6 @@ class HistoryRecord(Base):
     session_id = Column(String, index=True, nullable=False)
 
 
-
 # Create tables if they do not exist yet
 Base.metadata.create_all(engine)
 
@@ -110,32 +175,23 @@ Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
 
-
 # ----------------------------------------------------------------------
 # 3️⃣ Placeholder state‑machine implementation
 # ----------------------------------------------------------------------
 def check_input(validated: Dict[str, Any]) -> Dict[str, Any]:
     input_text = validated.get("input", "")
-    session = validated.get("session","" )
+    session = validated.get("session", "")
+    repeat = validated.get("repeat", False)
     if session == "":
         session = str(uuid.uuid4())
         ctx = {}
     else:
         ctx = validated.get("context", None)
         if not isinstance(ctx, dict):
-            return {"status":"error", "context": {} }
-
-    # check if we need to delay for llm usage ...
-    intent = ctx.get("intent", None)
-    if intent is None:
-        repeat = validated.get("repeat", False)
-        # special case: if not repeat and "wait" in input, signal delay
-        delay = True if repeat == False  and "wait" in input_text.lower() else False
-        if delay:   
-            return {"status":"delay", "context": ctx, "session": session }
+            return {"status": "error", "context": {}}
 
     # ok process input
-    return {"status":"ok", "context": ctx, "session": session }
+    return {"status": "ok", "context": ctx, "session": session, "repeat": repeat}
 
 
 # ----------------------------------------------------------------------
@@ -147,7 +203,7 @@ def store_history(
     lang: str,
     output: str | None,
     payload: Dict[str, Any],
-    intent: str | None = None
+    intent: str | None = None,
 ) -> None:
     """Insert a row into the history table."""
     record = HistoryRecord(
@@ -197,39 +253,132 @@ def route_handler():
     # 5.3 Run the state‑machine logic
     # --------------------------------------------------------------
     result = check_input(json_payload)
+    # check if we need to delay for llm usage ...
+    repeat = result.get("repeat", False)
+    ctx = result.get("context", {})
+    intent = ctx.get("intent", None)
+    if intent is None:
+        search = llm.embed([json_payload.get("input", "")])
+        # print("Input embedding:", search[0])
+        candidates = query_vectors(vectors, search[0])
+        print("Intent candidates:", candidates)
+        if candidates:
+            best_intent_idx = candidates[0][0]  # ["intent_id"]
+            best_intent_id = vector_intents[best_intent_idx]
+            best_score = candidates[1][0].astype(float)  # ["intent_id"]
 
+            best_intent = intents.get_intent_by_id(best_intent_id)
+            print(
+                f"Best intent id: {best_intent_id}, intent: {best_intent}, score: {best_score}"
+            )
+            # very low confidence, use fallback
+            if best_score <= 0.25:
+                fallback = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")
+                result["context"]["intent"] = fallback.get("name", None)
+                result["context"]["output"] = fallback.get("output", None)
+                target_intent = fallback.get("name", None)
+            # high confidence
+            elif best_score >= 0.75:
+                result["context"]["intent"] = best_intent.get("name", None)
+                result["context"]["output"] = best_intent.get("output", None)
+                target_intent = best_intent.get("name", None)
+            else:
+                target_intent = None
+                # low confidence, return error
+                intent_options = []
+                for i in range(1, len(candidates[0])):
+                    idx = candidates[0][i]
+                    intent_id = vector_intents[idx]
+                    score = candidates[1][i].astype(float)
+                    intent_name = intents.get_intent_by_id(intent_id).get("name")
+                    print(f" Next intent: intent: {intent_name}, score: {score}")
+                    intent_options.append(intent_name)
+                result["context"]["options"] = intent_options
+                if repeat == False:
+                    return (
+                        jsonify(
+                            {
+                                "context": result.get("context"),
+                                "session": result.get("session"),
+                            }
+                        ),
+                        202,
+                    )
+                else:
+                    print("Call llm to find better intent ...")
+                    # overwrite intent with alias if available
+                    intent_options = []
+                    for i in range(1, len(candidates[0])):
+                        idx = candidates[0][i]
+                        intent_id = vector_intents[idx]
+                        intent = intents.get_intent_by_id(intent_id)
+                        if intent.get("alias",None):
+                            intent_options.append(intent.get("alias",None))
+                        else:
+                            intent_options.append(intent.get("name",None))
+                    print("Intent options with alias:", intent_options)
+
+                    llmResult = llm.chat_json(
+                        temperature=0.0,
+                        system=system_prompt_check_intent_de,
+                        user=f"Nutzereingabe: '{json_payload.get('input','')}'. "
+                        f"Verfügbare Intents: {', '.join(intent_options)}. "
+                        "Antworten mit dem Index des am besten passenden Intents oder 'None', wenn keine Übereinstimmung vorliegt .",
+                    )
+                    print("LLM intent result:", llmResult)
+                    if llmResult is not None:
+                        if isinstance(llmResult, str):
+                            llmResult = int(llmResult.strip())
+                        if isinstance(llmResult, int):
+                            idx = candidates[0][llmResult]
+                            intent_id = vector_intents[idx]
+                            best_intent = intents.get_intent_by_id(intent_id)
+                            result["context"]["intent"] = best_intent.get("name", None)
+                            result["context"]["output"] = best_intent.get("output", None)
+                            result["context"]["LLM"] = True
+                            target_intent = best_intent.get("name", None)
+                            print("Selected intent from LLM:", target_intent)
+
+                        
+                    # selected_intent = llmResult.get("intent", "None")
+                    # return jsonify({"context": result.get("context"), "session": result.get("session")}), 200
+
+        else:
+            # no intent found, return error
+            return jsonify(error="No intent found"), 400
 
     # --------------------------------------------------------------
     # 5.4 Create intent / options
     # --------------------------------------------------------------
 
-
     # --------------------------------------------------------------
     # 5.5 Persist the step (always store the original payload)
     # --------------------------------------------------------------
-    if result.get("status","error") == "delay":
-        # 202 Accepted – client can poll later using the delay_id
-        return jsonify({"context": result.get("context"), "session": result.get("session")}), 202
-    elif result.get("status","error") == "error":
+    if result.get("status", "error") == "error":
         # 400 Bad Request – error in processing
         return jsonify(error="Error processing input"), 400
     else:
-        target = "dummy intent"
-        output = "This is a dummy response."
+        target = target_intent
+        output = result.get("context", {}).get("output", "This is a dummy response.")
         session = result.get("session")
-        payload =result.get("context")
+        payload = result.get("context")
         payload["intent"] = target
         store_history(
-            #raw_payload=json_payload,
-            user_input=json_payload.get("input",""),
+            # raw_payload=json_payload,
+            user_input=json_payload.get("input", ""),
             session=session,
             output=output,
-            payload = payload,
-            lang = json_payload.get("context",{}).get("lang","de"),
-            intent = target
+            payload=payload,
+            lang=json_payload.get("context", {}).get("lang", "de"),
+            intent=target,
         )
         # 200 OK – final context record
-        return jsonify({"context": result.get("context"), "session": result.get("session")}), 200
+        return (
+            jsonify(
+                {"context": result.get("context"), "session": result.get("session")}
+            ),
+            200,
+        )
 
 
 # ----------------------------------------------------------------------
@@ -246,5 +395,3 @@ def health_check():
 if __name__ == "__main__":
     # In production you would run behind gunicorn/uwsgi.
     app.run(host="0.0.0.0", port=5000, debug=True)
-    
-    

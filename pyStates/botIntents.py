@@ -2,10 +2,10 @@ import json
 import os
 
 class BotIntent:
-    def __init__(self, name, parameters=None):
-        self.name = name
+    def __init__(self, path, parameters=None):
+        self.name = path
+        self.name = os.path.basename(path)
         self.parameters = parameters or {}
-        path = os.path.join('..', 'rawData', f'{name}.json')
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 loaded = json.load(f)
@@ -23,14 +23,23 @@ class BotIntent:
                 self.data = []
 
         except FileNotFoundError:
-            raise FileNotFoundError(f"Data file for action '{name}' not found.")
+            raise FileNotFoundError(f"Data file for action '{self.name}' not found.")
         except Exception as e:
             raise RuntimeError(f"Error loading data file '{path}': {e}")
 
+    def get_intent_by_id(self, intent_id, lang="de"):
+        for entry in self.data:
+            if entry.get("id") == intent_id:
+                key = f"intent_{lang}"
+                name = entry.get(key,None)
+                output = entry.get(f"utter_{lang}", None)
+                alias = entry.get(f"alias_{lang}", None)
+                return {"name":name, "output": output, "alias": alias}
+        return None
 
 if __name__ == "__main__":
-    intent = BotIntent("intents_translated")
+    intent = BotIntent("../rawData/intents_translated.json")
     print(f"Loaded intent '{intent.name}' with {len(intent.data)} entries.")
     for i in intent.data[:5]:
-        print(i["intent_de"])
+        print(i["intent_de"],i["id"])
     

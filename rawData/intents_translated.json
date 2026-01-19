@@ -2963,6 +2963,9 @@
     "intent_en":"tp_definition",
     "intent_fr":"tp_definition",
     "intent_de":"tp_definition",
+    "alias_de":"Fragen zur Definition von Tieren und Pflanzen",
+    "alias_en":"Questions about the definition of animals and plants",
+    "alias_fr":"Questions sur la d\u00e9finition des animaux et des plantes", 
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3017,6 +3020,9 @@
     "intent_en":"tp_groesse",
     "intent_fr":"tp_groesse",
     "intent_de":"tp_groesse",
+    "alias_de":"Fragen zur Größe von Tieren und Pflanzen",
+    "alias_en":"Questions about the size of animals and plants",
+    "alias_fr":"Questions sur la taille des animaux et des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3087,6 +3093,9 @@
     "intent_en":"tp_habitat",
     "intent_fr":"tp_habitat",
     "intent_de":"tp_habitat",
+    "alias_de":"Fragen zum Lebensraum von Tieren und Pflanzen",
+    "alias_en":"Questions about the habitat of animals and plants",
+    "alias_fr":"Questions sur l'habitat des animaux et des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3168,6 +3177,9 @@
     "intent_en":"tp_erkennungsmerkmale",
     "intent_fr":"tp_erkennungsmerkmale",
     "intent_de":"tp_erkennungsmerkmale",
+    "alias_de":"Fragen zum Aussehen und speziellen Merkmalen von Tieren und Pflanzen",
+    "alias_en":"Questions about the appearance and special features of animals and plants",
+    "alias_fr":"Questions sur l'apparence et les caract\u00e9ristiques sp\u00e9ciales des animaux et des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3221,6 +3233,9 @@
     "intent_en":"animals_enemies",
     "intent_fr":"tir_feu",
     "intent_de":"tiere_feinde",
+    "alias_de":"Fragen zu Feinden von Tieren",
+    "alias_en":"Questions about enemies of animals",
+    "alias_fr":"Questions sur les ennemis des animaux",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3255,6 +3270,9 @@
     "intent_en":"animals_reproductive",
     "intent_fr":"tiers_gonflement",
     "intent_de":"tiere_geschlechtsreife",
+    "alias_de":"Fragen zur Geschlechtsreife von Tieren",
+    "alias_en":"Questions about the sexual maturity of animals",
+    "alias_fr":"Questions sur la maturit\u00e9 sexuelle des animaux",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3295,6 +3313,9 @@
     "intent_en":"animal_speed",
     "intent_fr":"vitesse_animaux",
     "intent_de":"tiere_geschwindigkeit",
+    "alias_de":"Fragen zur Geschwindigkeit von Tieren",
+    "alias_en":"Questions about the speed of animals",
+    "alias_fr":"Questions sur la vitesse des animaux",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3332,6 +3353,9 @@
     "intent_en":"animal_weights",
     "intent_fr":"tiers_poids",
     "intent_de":"tiere_gewicht",
+    "alias_de":"Fragen zum Gewicht von Tieren",
+    "alias_en":"Questions about the weight of animals",
+    "alias_fr":"Questions sur le poids des animaux",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3389,6 +3413,9 @@
     "intent_en":"tp_lateinischername",
     "intent_fr":"tp_nom_dernier",
     "intent_de":"tp_lateinischername",
+    "alias_de":"Fragen zum lateinischen Namen von Tieren und Pflanzen",
+    "alias_en":"Questions about the Latin name of animals and plants",
+    "alias_fr":"Questions sur le nom latin des animaux et des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3504,6 +3531,9 @@
     "intent_en":"tp_life_expectancy",
     "intent_fr":"tp_attente de vie",
     "intent_de":"tp_lebenserwartung",
+    "alias_de":"Fragen zur Lebenserwartung von Tieren und Pflanzen",
+    "alias_en":"Questions about the life expectancy of animals and plants",
+    "alias_fr":"Questions sur l'esp\u00e9rance de vie des animaux et des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3591,6 +3621,9 @@
     "intent_en":"animals_nutrition",
     "intent_fr":"tiers_nourriture",
     "intent_de":"tiere_nahrung",
+    "alias_de":"Fragen, wie sich Tiere ernähren",
+    "alias_en":"Questions about how animals feed",
+    "alias_fr":"Questions sur la fa\u00e7on dont les animaux se nourrissent",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3624,6 +3657,9 @@
     "intent_en":"animal_gestation",
     "intent_fr":"trage_trou",
     "intent_de":"tiere_tragzeit",
+    "alias_de":"Fragen zur Tragzeit von Tieren",
+    "alias_en":"Questions about the gestation period of animals",
+    "alias_fr":"Questions sur la p\u00e9riode de gestation des animaux",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -3719,7 +3755,7 @@
   },
   {
     "id":"63b6a1f6d9d1941218c5c7d2",
-    "intent":"nlu_fallback",
+    "intent":"fallback",
     "text":[
       "Und was ist mit Elefanten?",
       "was ist ein atypus affinis?",
@@ -3728,9 +3764,9 @@
       "Was ist 10+11?"
     ],
     "utter":"Ich bin mir nicht sicher, ob ich dich richtig verstanden habe.",
-    "intent_en":"nlu_fallback",
-    "intent_fr":"nlu_fallback",
-    "intent_de":"nlu_fallback",
+    "intent_en":"fallback",
+    "intent_fr":"fallback",
+    "intent_de":"fallback",
     "utter_de":"Ich bin mir nicht sicher, ob ich dich richtig verstanden habe.",
     "utter_en":"I am not sure if I understood you correctly.",
     "utter_fr":"Je ne suis pas s\u00fbr de bien comprendre ce que vous dites."
@@ -4040,6 +4076,9 @@
     "intent_en":"plant_bloom_time",
     "intent_fr":"p\u00e9riode de floraison des plantes",
     "intent_de":"pflanzen_bl\u00fctezeit",
+    "alias_de":"Fragen zur Blütezeit von Pflanzen",
+    "alias_en":"Questions about the bloom time of plants",
+    "alias_fr":"Questions sur la période de floraison des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4104,6 +4143,9 @@
     "intent_en":"plant_fruit",
     "intent_fr":"plante_fruit",
     "intent_de":"pflanzen_frucht",
+    "alias_de":"Fragen zur Frucht von Pflanzen",
+    "alias_en":"Questions about the fruit of plants",
+    "alias_fr":"Questions sur le fruit des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4169,6 +4211,9 @@
     "intent_en":"planten_genie\u00dfbarkeit",
     "intent_fr":"pflanzen_genie\u00dfbarkeit",
     "intent_de":"pflanzen_genie\u00dfbarkeit",
+    "alias_de":"Fragen zur Genießbarkeit von Pflanzen",
+    "alias_en":"Questions about the edibility of plants",
+    "alias_fr":"Questions sur la comestibilité des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4233,6 +4278,9 @@
     "intent_en":"plant_use",
     "intent_fr":"utilisation_des_plantes",
     "intent_de":"pflanzen_verwendung",
+    "alias_de":"Fragen zur Verwendung von Pflanzen",
+    "alias_en":"Questions about the use of plants",
+    "alias_fr":"Questions sur l'utilisation des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4299,6 +4347,9 @@
     "intent_en":"plant ecological significance",
     "intent_fr":"pflanzen_\u00f6kologischebedeutung",
     "intent_de":"pflanzen_\u00f6kologischebedeutung",
+    "alias_de":"Fragen zur ökologischen Bedeutung von Pflanzen",
+    "alias_en":"Questions about the ecological significance of plants",
+    "alias_fr":"Questions sur l'importance écologique des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4364,6 +4415,9 @@
     "intent_en":"plant knowledge worth knowing",
     "intent_fr":"connaissances_plantes",
     "intent_de":"pflanzen_wissenswertes",
+    "alias_de":"Fragen zu wissenswerten Fakten \u00fcber Pflanzen",
+    "alias_en":"Questions about interesting facts about plants",
+    "alias_fr":"Questions sur des faits intéressants sur les plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4427,6 +4481,9 @@
     "intent_en":"animals_living",
     "intent_fr":"tiers_leisures",
     "intent_de":"tiere_lebensweise",
+    "alias_de":"Fragen zur Lebensweise von Tieren",
+    "alias_en":"Questions about the lifestyle of animals",
+    "alias_fr":"Questions sur le mode de vie des animaux",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4504,6 +4561,9 @@
     "intent_en":"tp_fortpflanzung",
     "intent_fr":"tp_fortpflanzung",
     "intent_de":"tp_fortpflanzung",
+    "alias_de":"Fragen zur Fortpflanzung von Tieren und Pflanzen",
+    "alias_en":"Questions about the reproduction of animals and plants",
+    "alias_fr":"Questions sur la reproduction des animaux et des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4611,6 +4671,9 @@
     "intent_en":"tp_aussehen",
     "intent_fr":"tp_aussehen",
     "intent_de":"tp_aussehen",
+    "alias_de":"Fragen zum Aussehen von Tieren und Pflanzen",
+    "alias_en":"Questions about the appearance of animals and plants",
+    "alias_fr":"Questions sur l'apparence des animaux et des plantes",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4736,6 +4799,9 @@
     "intent_en":"tp_generell",
     "intent_fr":"tp_g\u00e9n\u00e9ralement",
     "intent_de":"tp_generell",
+    "alias_de":"Fragen zu Tieren und Pflanzen der Rheinauen allgemein",
+    "alias_en":"Questions about animals and plants of the Rhine floodplains in general",
+    "alias_fr":"Questions sur les animaux et les plantes des plaines inondables du Rhin en g\u00e9n\u00e9ral",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4749,7 +4815,7 @@
     "utter":null,
     "intent_en":"no reaction",
     "intent_fr":"pas de r\u00e9action",
-    "intent_de":"no reaction",
+    "intent_de":"keine Reaktion",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
@@ -4891,6 +4957,9 @@
     "intent_en":"animals_calls",
     "intent_fr":"sons_animaux",
     "intent_de":"tiere_rufe",
+    "alias_de":"Fragen zu den Rufen von Tieren",
+    "alias_en":"Questions about animal calls",
+    "alias_fr":"Questions sur les appels des animaux",
     "utter_de":"",
     "utter_en":"",
     "utter_fr":""
