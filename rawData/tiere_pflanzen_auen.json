@@ -1858,7 +1858,7 @@
     "Habitat":"Er lebt in offenen Gr\u00fcnlandgebieten mit B\u00fcschen und Waldr\u00e4ndern, aber auch in naturnahen G\u00e4rten und Parks.",
     "Fortpflanzung":"Im Februar nach Ende des Frostes, suchen die ersten Teichmolche kleine, besonnte Teiche und Gr\u00e4ben mit reichem Pflanzenbewuchs zum Ablaichen auf. Die Hauptlaichzeit ist aber von M\u00e4rz bis Mai, wenn die Wassertemperatur mindestens acht Grad Celsius betr\u00e4gt. Die Weibchen k\u00f6nnen pro Saison 100 bis 300 Eier legen. Sie werden einzeln an Wasserpflanzen oder Falllaub geheftet.",
     "Gr\u00f6\u00dfe":"11 cm",
-    "Name":"Teichfrosch",
+    "Name":"Teichmolch",
     "Name_alt":"Wasserfrosch oder Gr\u00fcnfrosch",
     "Links":[
       {
@@ -1866,12 +1866,12 @@
       }
     ],
     "Typ":"Tier",
-    "Name_sci":"Rana kl. Esculenta",
-    "Name_eng":"edible frog",
-    "Familie":"Echte Fr\u00f6sche (Ranidae)",
-    "Gattung":"Wasserfr\u00f6sche (Pelophylax)",
+    "Name_sci":"Triturus vulgaris",
+    "Name_eng":"smooth newt",
+    "Familie":"Echte Salamander (Salamandridae)",
+    "Gattung":"Lissotriton",
     "Lebensraum":"Stillgew\u00e4sser",
-    "Klasse":"Amphibien",
+    "Klasse":"Reptilien",
     "Lebensweise":"Bis Juli haben die meisten Teichmolche ihre Laichgew\u00e4sser wieder verlassen. Von Oktober bis Februar halten die Winterruhe an frostsicheren Pl\u00e4tzen in Erdh\u00f6hlen oder unter Steinen. Manche Molche \u00fcberwintern aber auch am Boden der Gew\u00e4sser.",
     "Nahrung":"Die erwachsenen Molche ern\u00e4hren sich im Wasser von Kaulquappen und dem Laich anderer Amphibienarten, sowie Kleinkrebsen und Wasserinsektenlarven.",
     "Feinde":null,
@@ -1891,7 +1891,7 @@
     "\u00dcberwinterung":null,
     "Verhalten":null,
     "Paarung":null,
-    "Gruppe":"Teichfrosch"
+    "Gruppe":"Teichmolch"
   },
   {
     "Erkennungsmerkmale":"Ihr kr\u00e4ftig gebauter, brauner K\u00f6rper ist an der Oberseite mit warzigen Hautdr\u00fcsen \u00fcbers\u00e4t. Die Pupille bildet einen waagerechten Schlitz, die Iris leuchtet kupferfarben. Hinter dem Kopf fallen gro\u00dfe Ohrdr\u00fcsen auf, die ein Hautgift zur Abwehr von Feinden enthalten. Dieses Gift ist f\u00fcr uns Menschen harmlos, solange wir es nicht in die Augen oder auf Schleimh\u00e4ute bringen.\nErdkr\u00f6ten haben kurze Hinterbeine und bewegen sich auf allen vieren schreitend vorw\u00e4rts. Bei Gefahr k\u00f6nnen sie auch h\u00fcpfen.",
@@ -2176,44 +2176,6 @@
     "Verhalten":null,
     "Paarung":null,
     "Gruppe":"Lauchschrecke"
-  },
-  {
-    "Erkennungsmerkmale":null,
-    "Habitat":"Die kleine Bechsteinfledermaus lebt in W\u00e4ldern und Parks mit hohen B\u00e4umen.",
-    "Fortpflanzung":null,
-    "Gr\u00f6\u00dfe":null,
-    "Name":"Bechsteinfledermaus",
-    "Name_alt":null,
-    "Links":[
-
-    ],
-    "Typ":"Tier",
-    "Name_sci":"Myotis bechsteinii",
-    "Name_eng":"Bechstein's bat",
-    "Familie":"Glattnasen (Vespertilionidae)",
-    "Gattung":"Mausohren (Myotis)",
-    "Lebensraum":"Hartholzaue",
-    "Klasse":"S\u00e4ugetiere",
-    "Lebensweise":"In der sp\u00e4ten D\u00e4mmerung verl\u00e4sst sie ihr Versteck in Baumh\u00f6hlen oder Nistk\u00e4sten und langsamem, fast schwerf\u00e4lligem Flug \u2013 keine 5 m \u00fcber dem Boden nach Nachtschmetterlingen und anderen Insekten. Sie f\u00e4ngt ihre Beute im Flug oder pfl\u00fcckt sie von Bl\u00e4ttern. Die Bechsteinfledermaus ist nicht sehr gesellig und bildet nur kleine Wochenstuben von 5-50 Weibchen. Dabei wechselt sie h\u00e4ufig das Quartier und nimmt ihr Junges mit. Den Winter verbringt sie in tiefem Schlaf kopf\u00fcber h\u00e4ngend in Felsh\u00f6hlen.",
-    "Nahrung":null,
-    "Feinde":null,
-    "Lebenserwartung":null,
-    "Schutz":null,
-    "Wissenswertes":null,
-    "Bl\u00fctezeit":null,
-    "Verwendung":null,
-    "Frucht":null,
-    "Vorkommen":null,
-    "Genie\u00dfbarkeit":null,
-    "\u00d6kologische Bedeutung":null,
-    "Giftigkeit":null,
-    "lateinischerName":null,
-    "Alter":null,
-    "Gewicht":null,
-    "\u00dcberwinterung":null,
-    "Verhalten":null,
-    "Paarung":null,
-    "Gruppe":"Bechsteinfledermaus"
   },
   {
     "Erkennungsmerkmale":"Je nach Standort kann er zwischen 6 und 10 m hoch werden. \nSeine Bl\u00e4tter sind oval, gez\u00e4hnt und etwas eingerollt. Die Oberseite gl\u00e4nzt, die Unterseite ist etwas behaart. [Bl\u00fctezeit] Im Mai entwickeln sich aus den rosafarbenen Knospen pr\u00e4chtige wei\u00dfe Bl\u00fcten, die in Str\u00e4u\u00dfen beieinander stehen.  Die Bl\u00fcten tragen in der Mitte 20 gelbe Staubbeutel und duften angenehm.",
@@ -6293,7 +6255,7 @@
     "Habitat":"[Lebensweise] Blaupfeile fliegen von Ende Mai bis September an stehenden Gew\u00e4ssern mit offenen, sandigen Uferzonen.",
     "Fortpflanzung":"Bei der Paarung sitzen die Tiere im Paarungsrad fast bewegungslos auf dem Boden. Die Weibchen legen unter Bewachung des M\u00e4nnchens die Eier in flachem, pflanzenreichem Wasser ab. Die Larven schl\u00fcpfen nach 3 Wochen. Sie h\u00e4uten sich 13mal und werden fast 3 cm lang. Bis die fertige Libelle schl\u00fcpft, dauert es 2-3 Jahre.",
     "Gr\u00f6\u00dfe":"5 cm",
-    "Name":"Plattbauch",
+    "Name":"Großer Blaupfeil",
     "Name_alt":null,
     "Links":[
       {
@@ -6301,10 +6263,10 @@
       }
     ],
     "Typ":"Tier",
-    "Name_sci":"Libellula depressa",
-    "Name_eng":"broad-bodied chaser",
+    "Name_sci":"Orthetrum cancellatum",
+    "Name_eng":"black-tailed skimmer",
     "Familie":"Segellibellen (Libellulidae)",
-    "Gattung":"Libellula",
+    "Gattung":"Blaupfeile (Orthetrum)",
     "Lebensraum":"Stillgew\u00e4sser",
     "Klasse":"Insekten-Libellen",
     "Lebensweise":"Blaupfeile fliegen von Ende Mai bis September an stehenden Gew\u00e4ssern mit offenen, sandigen Uferzonen.  Die M\u00e4nnchen ruhen gerne auf Sandboden oder auf Wegen. Auff\u00e4llig ist ihr tiefer Flug, oft nur wenige cm \u00fcber der Wasser- oder Erdoberfl\u00e4che.",
@@ -6326,7 +6288,7 @@
     "\u00dcberwinterung":null,
     "Verhalten":null,
     "Paarung":null,
-    "Gruppe":"Plattbauch"
+    "Gruppe":"Blaupfeile"
   },
   {
     "Erkennungsmerkmale":"Es ist nicht ganz einfach, die 12 Arten europ\u00e4ischer Azurjungfern auseinanderzuhalten. Die Hufeisen-Azurjungfer mit ihren 5 cm Fl\u00fcgelspannweite ist an einem hufeisen- oder U-f\u00f6rmigen schwarzen Muster auf dem zweiten Hinterleibsring des M\u00e4nnchens zu erkennen.",

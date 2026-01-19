@@ -78,7 +78,7 @@ class BotAction:
             print(f"Error finding entity: {e}")
             return []
 
-    def find_key(self, user_input):
+    def find_entity_key(self, user_input):
         try:
             terms = [user_input] + user_input.split(" ")
             for term in terms:
@@ -94,6 +94,18 @@ class BotAction:
             print(f"Error finding keys: {e}")
             return []
 
+    def get_entity_features(self,name,key):
+        try:
+            items = [e for e in self.data if name.lower() == (e.get('Name') or '').lower()]
+            if items:
+                values = [f.get(key) for f in items if key in f]
+                return values
+            else:
+                print("No matching entity found for features:", name)
+                return []
+        except Exception as e:
+            print(f"Error getting features: {e}")
+            return []   
 
 if __name__ == "__main__":
     action = BotAction("tiere_pflanzen_auen")
@@ -101,6 +113,12 @@ if __name__ == "__main__":
         result = action.extract_animal_or_plant(user_input)
         if result:
             print("1:", [r.get('Name') for r in result])
+            for f in ["Lebensraum","Merkmale","Links"]:
+                name = result[0].get('Name')
+                features = action.get_entity_features(name,f)
+                if features:
+                    print(f"{name}   Feature '{f}':", features)
+                    
         else:
             print("1: No results found.\n-----\n")
 
@@ -118,7 +136,7 @@ if __name__ == "__main__":
             print("3: No results found.\n-----\n")
         print("-----\n")
 
-        result = action.find_key(user_input)
+        result = action.find_entity_key(user_input)
         if result:
             print("4:", result)
         else:
