@@ -220,9 +220,9 @@ def store_history(
 
 
 # ----------------------------------------------------------------------
-# 5️⃣ Flask route – /route
+# 5️⃣ Flask route – /
 # ----------------------------------------------------------------------
-@app.route("/route", methods=["POST"])
+@app.route("/", methods=["POST"])
 def route_handler():
     # --------------------------------------------------------------
     # 5.1 Parse JSON body
@@ -409,6 +409,7 @@ def route_handler():
 
             elif target_intent.lower().startswith("tp_"):
                 feature = target_intent[3:].capitalize()
+                print("TP feature:", feature)
                 entity_result = actions.extract_animal_or_plant(
                     json_payload.get("input", "")
                 )
@@ -424,7 +425,15 @@ def route_handler():
                         output_parts.append(
                             "\n".join([f"Bild: {img}" for img in features.get("image", [])])
                         )
-                    result["context"]["output"] = "\n\n".join(output_parts)
+                    print("Tiere,Pflanzen entity result:", entity_result, features, output_parts)
+                    result["context"]["entity"] = name
+                    result["context"]["type"] = entity_result[0].get("Typ", None)
+                    if output_parts and len(output_parts) > 0:
+                        result["context"]["output"] = "\n\n".join(output_parts)
+                    else:
+                        result["context"]["output"] = "Leider habe ich für diese Eigenschaft keine Informationen."
+                    
+                    
                 else:
                     result["context"][
                         "output"
@@ -432,11 +441,12 @@ def route_handler():
                     
             elif target_intent.lower().startswith("tiere_"):
                 feature = target_intent[6:].capitalize()
+                print("Tiere feature:", feature)
                 entity_result = actions.find_entity(
                     json_payload.get("input", ""),
                     "Tier"
                 )
-                if entity_result:
+                if entity_result and len(entity_result) > 0:
                     name = entity_result[0].get("Name", None)
                     features = actions.get_entity_features(
                         name, feature
@@ -448,11 +458,17 @@ def route_handler():
                         output_parts.append(
                             "\n".join([f"Bild: {img}" for img in features.get("image", [])])
                         )
-                    result["context"]["output"] = "\n\n".join(output_parts)
+                    print("Tier entity result:", entity_result, features, output_parts)
+                    result["context"]["entity"] = name
+                    result["context"]["type"] = entity_result[0].get("Typ", None)
+                    if output_parts and len(output_parts) > 0:
+                        result["context"]["output"] = "\n\n".join(output_parts)
+                    else:
+                        result["context"]["output"] = "Leider habe ich für diese Eigenschaft keine Informationen."
                 else:
                     result["context"][
                         "output"
-                    ] = "Leider habe ich dazu keine Informationen gefunden."
+                    ] = "Leider habe ich für dieses Tier keine Informationen gefunden."
 
             elif target_intent.lower().startswith("pflanzen_"):
                 feature = target_intent[8:].capitalize()
@@ -472,11 +488,17 @@ def route_handler():
                         output_parts.append(
                             "\n".join([f"Bild: {img}" for img in features.get("image", [])])
                         )
-                    result["context"]["output"] = "\n\n".join(output_parts)
+                    print("Pflanzen feature:", feature, "entity result:", entity_result, features, output_parts)
+                    result["context"]["entity"] = name
+                    result["context"]["type"] = entity_result[0].get("Typ", None)
+                    if output_parts and len(output_parts) > 0:
+                        result["context"]["output"] = "\n\n".join(output_parts)
+                    else:
+                        result["context"]["output"] = "Leider habe ich für diese Eigenschaft keine Informationen."
                 else:
                     result["context"][
                         "output"
-                    ] = "Leider habe ich dazu keine Informationen gefunden."
+                    ] = "Leider habe ich für diese Pflanze keine Informationen gefunden."
 
 
     # --------------------------------------------------------------
@@ -508,7 +530,7 @@ def route_handler():
 # ----------------------------------------------------------------------
 # 6️⃣ Optional health‑check endpoint
 # ----------------------------------------------------------------------
-@app.route("/health", methods=["GET"])
+@app.route("/", methods=["GET"])
 def health_check():
     return jsonify(status="ok"), 200
 
@@ -518,4 +540,4 @@ def health_check():
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
     # In production you would run behind gunicorn/uwsgi.
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=11534, debug=True)
