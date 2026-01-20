@@ -620,4 +620,4 @@ def health_check():
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
     # In production you would run behind gunicorn/uwsgi.
-    app.run(host="0.0.0.0", port=11534, debug=True)
+    app.run(host="0.0.0.0", port=11354, debug=True)
