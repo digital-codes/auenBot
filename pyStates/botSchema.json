@@ -35,6 +35,11 @@
                     "value": null,
                     "comment": "Detected user intent name"
                 },
+                "history": {
+                    "type": "string",
+                    "value": null,
+                    "comment": "Conversation history or previous interactions"
+                },
                 "sequence": {
                     "type": "number",
                     "value": null,

@@ -262,9 +262,13 @@ def route_handler():
     # check if we need to delay for llm usage ...
     repeat = result.get("repeat", False)
     ctx = result.get("context", {})
-    intent = ctx.get("intent", None)
+    user_intent = ctx.get("intent", None)
     user_input = json_payload.get("input", "")
-    if intent is None:
+    user_history = ctx.get("history", None)
+    user_entity = ctx.get("entity", None)
+    user_feature = ctx.get("feature", None)
+    # default / fallback: no intent yet
+    if user_intent is None:
         search = llm.embed([user_input])
         # print("Input embedding:", search[0])
         candidates = query_vectors(vectors, search[0])
@@ -328,7 +332,11 @@ def route_handler():
                     )
                 else:
                     print("Remaining intent options:", intent_options)
-                    result["context"]["options"] = intent_options
+                    options = []
+                    for o in range(len(intent_options)):
+                        options.append({"title": intent_options[o],"label":intent_aliases[o]})
+                    result["context"]["options"] = options
+                    
                     if repeat == False:
                         return (
                             jsonify(
@@ -383,7 +391,7 @@ def route_handler():
             return jsonify(error="No intent found"), 400
 
     else:
-        target_intent = intent
+        target_intent = user_intent
         print("Target intent from request:", target_intent)
 
     # --------------------------------------------------------------
@@ -434,22 +442,23 @@ def route_handler():
                         result["context"]["entity"] = name
                         result["context"]["feature"] = feature  
                         features = actions.get_entity_features(name, feature)
+                        if DEBUG: print("Retrieved features:", features)
                         output_parts = []
                         if features.get("text", []):
                             output_parts.append("\n".join(features.get("text", [])))
                             result["context"]["output"] = {
                                 "text": "\n\n".join(output_parts)
                             }
-                            if len(features.get("image", [])) > 0:
-                                print("Features images:", features.get("image"))
-                                result["context"]["output"]["image"] = features.get(
-                                    "image"
-                                )[0]
-                            if len(features.get("audio", [])) > 0:
-                                print("Features audio:", features.get("audio"))
-                                result["context"]["output"]["audio"] = features.get(
-                                    "audio"
-                                )[0]
+                        if len(features.get("image", [])) > 0:
+                            print("Features images:", features.get("image"))
+                            result["context"]["output"]["image"] = features.get(
+                                "image"
+                            )[0]
+                        if len(features.get("audio", [])) > 0:
+                            print("Features audio:", features.get("audio"))
+                            result["context"]["output"]["audio"] = features.get(
+                                "audio"
+                            )[0]
                     else:
                         if DEBUG: print("Bio intent incomplete, no action taken.")
                         result["context"]["output"] = {
