@@ -248,6 +248,11 @@ def old_get_lr_text(auen_name):
     return BotAction.get_entity_features_static(auen_name, "Erkennungsmerkmale")
 
 
+
+# ----------------------------------------------------------------------
+# Bot utterances and options
+# ----------------------------------------------------------------------
+
 bot_utters = {
     "no_image": "Tut mir leid, ich habe leider kein Bild.",
     "tp_unclear": "Ich habe leider nicht verstanden, welches Tier/welche Pflanze du meinst.",
@@ -300,104 +305,6 @@ bot_options = {
     ]
 }
 
-bot_measurments = { 
-}
-
-def old_action_Get_Messwerte(type):
-    """
-    Action to fetch and report air quality measurement values.
-    Expects `fetch_json_data(url)` helper function to exist.
-    """
-    messwert = type.upper()
-    validTypes = [m["title"] for m in bot_options["measurement_type"]]
-    if DEBUG: print("Requested measurement type:", messwert, "Valid types:", validTypes)
-    if messwert not in validTypes:
-        options = bot_options["measurement_type"]
-        if DEBUG: print("Invalid measurement type:", messwert,options)
-        return False,options,bot_utters["measurement_prompt"]
-
-    url = ""
-    messwert_label = ""
-    unit = " µg/m³."
-    time = " aktuell "
-    success = True
-
-    lqi = ["sehr gut", "gut", "befriedigend", "ausreichend", "schlecht", "sehr schlecht"]
-
-    if messwert == "O3":
-        messwert_label = "Der Ozonwert beträgt"
-        url = "https://lupo-cloud.de/air/metric/kit.iai.test.o3"
-    elif messwert == "PM10":
-        messwert_label = "Der Feinstaubwert PM10 beträgt"
-        url = "https://lupo-cloud.de/air/metric/kit.iai.test.pm10"
-    elif messwert == "PM2,5":
-        messwert_label = "Der Feinstaubwert PM2,5 beträgt"
-        url = "https://lupo-cloud.de/air/metric/kit.iai.test.pm25k"
-    elif messwert == "NO2":
-        messwert_label = "Der Stickstoff-Dioxidwert beträgt"
-        url = "https://lupo-cloud.de/air/metric/kit.iai.test.no2"
-    elif messwert == "LQI":
-        messwert_label = "Der Luftqualitätsindex klassifiziert die Luftqualität"
-        url = "https://lupo-cloud.de/air/metric/kit.iai.test.luqx"
-    else:
-        return False,options,bot_utters["measurement_prompt"]
-
-    url += "?from=2d-ago&labels=station:DEBW081"
-    json_data = requests.get(url).json()
-    if len(json_data[0]["values"]) == 0:
-        return False,[],bot_utters["measurement_unavail"]
-
-    if DEBUG: print("Fetched JSON data:", json_data[0]["values"][-5:])
-        
-    # try to get the most recent valid value. iterate over last 5 values. break at the first valid one.
-    options = []
-    for k in range(5):
-        value = json_data[0]["values"][-(k+1)]
-        try:
-            value = int(value)
-            success = True
-        except TypeError:
-            success = False
-        if success:
-            if messwert == "LQI":
-                unit = "."
-                message = messwert_label + time + "als " + lqi[value-1] + unit + " Dabei berücksichtigt der Luftqualitätsindex mehrere einzelne Messwerte (z.B. Ozon, Feinstaub). Die Klassifikation orientiert sich an dem schlechtesten Wert aus diesen Messwerten."
-            else:
-                message = messwert_label + time + str(value) + unit
-                evaluation = old_mesage_checks(messwert, value)
-                if evaluation and evaluation != "OK":
-                    eval_options = bot_options["measurement_eval"]
-                    for opt in eval_options:
-                        if opt["title"] == evaluation:
-                            if opt.get("link", None):
-                                options = opt
-                                message += "\nEs gibt weitere Infos zum Messwert"
-                            else:
-                                message += "\n" + opt["text"]
-                            break
-            break
-
-    return True, options, message
-
-
-
-def old_mesage_checks(type,value):
-    grenzwerte = {"O3":[180, 240], "NO2":[200, 400]}
-    # grenzwerte = {"O3":[2,5], "NO2":[200, 400]}  # testing only
-    if type in grenzwerte:
-        boundaries = grenzwerte[type]
-        if value >= boundaries[1]:
-            return "Alarm"
-        elif value >= boundaries[0]:
-            return "Warning"
-        else:
-            return "OK"
-    elif type == "PM2,5":
-        return "PM2,5"
-    elif type == "PM10":
-        return "PM10"
-    else:
-        return None
 
 # ----------------------------------------------------------------------
 # BotAction class: new implementation
@@ -445,12 +352,7 @@ class BotAction:
         print(f"Loaded data for action '{self.name}' with {len(self.data)} entries.")
         print(f"Available keys: {self.keys}")
 
-        self.bot_utters = {
-            "no_image": "Tut mir leid, ich habe leider kein Bild.",
-            "tp_unclear": "Ich habe leider nicht verstanden, welches Tier/welche Pflanze du meinst.",
-            "gen_unclear": "Du kannst Fragen zu Tieren und Pflanzen in der Aue stellen.\nFrage z.B. 'Welche Tiere gibt es in der Rheinaue?','Welche Fische leben im Stillgewässer?' oder 'Welche Pflanzen gibt es in der Hartholzaue?'",
-            "error": "Da ist leider etwas schiefgelaufen. Entschuldigung",
-        }
+
 
     @staticmethod
     def measurement_retrieval(type):
