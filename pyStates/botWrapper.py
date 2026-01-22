@@ -12,6 +12,7 @@ Features
 
 from __future__ import annotations
 import json
+from multiprocessing import context
 from timeit import repeat
 import uuid
 from datetime import datetime, timezone
@@ -193,7 +194,7 @@ def check_input(validated: Dict[str, Any]) -> Dict[str, Any]:
             return {"status": "error", "context": {}}
 
     # ok process input
-    return {"status": "ok", "context": ctx, "session": session, "repeat": repeat}
+    return {"status": "ok", "context": ctx, "session": session, "repeat": repeat, "input": input_text}
 
 def checkOptions(input_text: str, options: list) -> int | None:
     """Check if the input_text matches one of the options.
@@ -273,7 +274,7 @@ def route_handler():
     if DEBUG: print("Current context:", ctx)
     user_intent = ctx.get("intent", None)
     if DEBUG: print("User intent:", user_intent)
-    user_input = json_payload.get("input", "")
+    user_input = result.get("input", "")
     if DEBUG: print("User input:", user_input)
 
     options = ctx.get("options", [])
@@ -315,6 +316,53 @@ def route_handler():
         else:
             if DEBUG: print("No option matched user input yet, start over")
             target_intent = None
+
+
+    # test options here with user input == test_options
+    # --------------------------------------------------------------
+    # 5.4 Check / determine intent
+    # --------------------------------------------------------------
+    if user_input == "test_options" and (user_intent is None or user_intent == ""):
+        if DEBUG: print("Test options mode, no intent yet.")
+        options = [{"label":"Option A","title":"Test_Intent A"},{"label":"Option B","title":"Test_Intent B"},{"label":"Option C","title":"Test_Intent C"}]
+        ctx = result.get("context", {})
+        if DEBUG: print("context:", ctx)
+        ctx["output"] = {"text": "Intent test"}
+        ctx["options"] = options
+        ctx["intent"] = ""
+        session = result.get("session")
+
+        return (
+            jsonify({"context": ctx, "session": session}),
+            200,
+        )
+    elif user_input.startswith("Test_Intent") and (user_intent is None or user_intent == ""):
+        if DEBUG: print("Test options mode, with intent yet.")
+        options = [{"label":"Option A","title":"Test_Entity A"},{"label":"Option B","title":"Test_Entity B"},{"label":"Option C","title":"Test_Entity C"}]
+        ctx = result.get("context", {})
+        ctx["output"] = {"text": "Entity test"}
+        ctx["options"] = options
+        ctx["intent"] = user_input
+        session = result.get("session")
+
+        return (
+            jsonify({"context": ctx, "session": session}),
+            200,
+        )
+    elif user_input.startswith("Test_Entity") and (user_intent.startswith("Test_Intent")):
+        if DEBUG: print("Finish options mode.")
+        ctx = result.get("context", {})
+        ctx["output"] = {"text": "Options test done"}
+        ctx.pop("options", None)
+        ctx["intent"] = ""
+        ctx["entity"] = user_input
+        session = result.get("session")
+
+        return (
+            jsonify({"context": ctx, "session": session}),
+                200,
+        )
+
     
 
     # check if we need to delay for llm usage ...
