@@ -206,6 +206,22 @@ def checkOptions(input_text: str, options: list) -> int | None:
             return idx
     return None
 
+def clrOutput(ctx: dict) -> dict:
+    """Clear output from context."""
+    if "output" in ctx:
+        del ctx["output"]
+    if "intent" in ctx:
+        del ctx["intent"]
+    if "entity" in ctx:
+        del ctx["entity"]
+    if "feature" in ctx:
+        del ctx["feature"]
+    if "options" in ctx:
+        del ctx["options"]
+    if "LLM" in ctx:
+        del ctx["LLM"]
+    return ctx
+
 # ----------------------------------------------------------------------
 # 4️⃣ Helper: store a step in the DB
 # ----------------------------------------------------------------------
@@ -297,7 +313,7 @@ def route_handler():
     # --------------------------------------------------------------
     # Check options, if any
     # --------------------------------------------------------------
-    if "options" in options and len(options) > 0:
+    if len(options) > 0:
         if DEBUG: print("Checking user input against options:", user_input, options)
         selected_idx = checkOptions(user_input, [opt["title"] for opt in options])
         if selected_idx is not None:
@@ -306,10 +322,13 @@ def route_handler():
             if DEBUG: print("User selected option:", selection)
 
             # check if we are missing intent or entity here 
-            if (user_intent is None or user_intent == "") and "intent" in selection:
+            # use title as intent first
+            if (user_intent is None or user_intent == "") and "title" in selection:
                 user_intent = selection["title"]
                 if DEBUG: print("Mapped selected option to intent:", user_intent)
-            elif (user_entity is None or user_entity == "") and "entity" in selection:
+            #elif (user_entity is None or user_entity == "") and "entity" in selection:
+            # use title for entity mapping
+            elif (user_entity is None or user_entity == "") and "title" in selection:
                 user_entity = selection["title"]
                 if DEBUG: print("Mapped selected option to entity:", user_entity)
         # not found. clear options and continue
@@ -385,6 +404,7 @@ def route_handler():
             # very low confidence, use fallback
             if best_score <= 0.25:
                 fallback = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")
+                result["context"] = clrOutput(result["context"])
                 result["context"]["intent"] = fallback.get("name", None)
                 result["context"]["output"] = {"text": fallback.get("output", None)}
                 target_intent = fallback.get("name", None)
@@ -392,9 +412,13 @@ def route_handler():
             # high confidence
             elif best_score >= 0.75:
                 target_intent = best_intent.get("name", None)
+                if DEBUG: print("Selected high score best intent:", best_intent)
+                result["context"] = clrOutput(result["context"])
                 result["context"]["intent"] = target_intent
                 result["context"]["output"] = {"text": best_intent.get("output", None)}
-                if DEBUG: print("Selected best intent:", target_intent)
+                if best_intent.get("link", None) != None and best_intent["link"].get("url", None) != None:
+                    if DEBUG: print("Intent has link output:", best_intent["link"])
+                    result["context"]["output"]["link"] = best_intent['link']["url"]
             # intermediate confidence. check with LLM
             else:
                 target_intent = None
@@ -422,16 +446,21 @@ def route_handler():
                 # check if only one left after deduplication. this must be the best one already
                 if len(intent_options) == 1:
                     target_intent = best_intent.get("name", None)
+                    result["context"] = clrOutput(result["context"])
                     result["context"]["intent"] = target_intent
                     result["context"]["output"] = {
                         "text": best_intent.get("output", None)
                     }
+                    if best_intent.get("link", None) != None and best_intent["link"].get("url", None) != None:
+                        if DEBUG: print("Intent has link output:", best_intent["link"])
+                        result["context"]["output"]["link"] = best_intent['link']["url"]
                     if DEBUG: print(
                         "Selected lower score best intent after deduping:",
                         target_intent,
                     )
                 else:
                     if DEBUG: print("Remaining intent options:", intent_options)
+                    result["context"] = clrOutput(result["context"])
                     options = []
                     for o in range(len(intent_options)):
                         options.append({"title": intent_options[o],"label":intent_aliases[o]})
@@ -470,12 +499,17 @@ def route_handler():
                                 idx = candidates[0][llmResult]
                                 intent_id = vector_intents[idx]
                                 best_intent = intents.get_intent_by_id(intent_id)
+                                if DEBUG: print("Selected high score best intent from LLM:", best_intent)
+                                result["context"] = clrOutput(result["context"])
                                 result["context"]["intent"] = best_intent.get(
                                     "name", None
                                 )
                                 result["context"]["output"] = {
                                     "text": best_intent.get("output", None)
                                 }
+                                if best_intent.get("link", None) != None and best_intent["link"].get("url", None) != None:
+                                    if DEBUG: print("Intent has link output:", best_intent["link"])
+                                    result["context"]["output"]["link"] = best_intent['link']["url"]
                                 result["context"]["LLM"] = True
                                 target_intent = best_intent.get("name", None)
                                 if DEBUG: print("Selected intent from LLM:", target_intent)
@@ -504,10 +538,8 @@ def route_handler():
             or result["context"]["output"].get("text", "") == ""
         ):
             bio_intent = intents.bio_intents(target_intent)
-            if not "Typ" in bio_intent:
-                # we don't have a bio intent
-                if DEBUG: print("Non-bio intent, no action required.")
-            else:
+            # every bio_intent returns a dict with keys: Typ, Entity, Feature
+            if "Typ" in bio_intent:
                 if DEBUG: print("Bio intent:", bio_intent, " from input:", user_input)
                 if bio_intent.get("Typ", None) is not None:
                     if bio_intent["Typ"] == "Any" and bio_intent["Feature"] is None:
@@ -564,8 +596,48 @@ def route_handler():
                         result["context"]["output"] = {
                             "text": "Leider habe ich dazu keine Informationen gefunden. Versuche es mit einem anderen Begriff."
                         }
+
+            elif target_intent == "messdaten_welche":
+                measurement_options = BotAction.measurement_options()
+                if DEBUG: print("Measurement options:", measurement_options)
+                if user_entity is not None and user_entity != "" and user_entity in [mo["title"] for mo in measurement_options]:
+                    if DEBUG: print("Messdaten retrieval action for", user_entity)
+                    valid,  info, text = BotAction.measurement_retrieval(user_entity)
+                    if DEBUG: print("Measurement retrieval:", valid, info, text)
+                    if not valid:
+                        result["context"]["output"] = {
+                            "text": "Leider konnte ich die Messdaten nicht abrufen. Versuche es später noch einmal."
+                        }
+                    else:
+                        result["context"]["output"] = {
+                            "text": text
+                        }
+                    result["context"].pop("options", None)
+                    
+                else:
+                    if DEBUG: print("Messdaten welche intent action required.")
+                    options = []
+                    for mo in measurement_options:
+                        options.append({"title": mo["title"], "label": mo["text"]})
+                    result["context"]["options"] = options
+                    result["context"]["output"] = {"text": "Welche Messdaten interessieren dich? Wähle eine der folgenden Optionen:"}   
+
+            else:
+                # we don't have a valid intent
+                if DEBUG: print("No valid intent, no action required.")
                         
 
+        elif target_intent is "messdaten":
+            measurement_options = BotAction.measurement_options()
+            if DEBUG: print("Measurement options:", measurement_options)
+            if DEBUG: print("Messdaten intent action required.")
+            options = []
+            for mo in measurement_options:
+                options.append({"title": mo["title"], "label": mo["text"]})
+            result["context"]["options"] = options
+            result["context"]["output"] = {"text": "Welche Messdaten interessieren dich? Wähle eine der folgenden Optionen:"}   
+            # overwrite target intent to messdaten_welche
+            target_intent = "messdaten_welche"
 
     # --------------------------------------------------------------
     # 5.5 Persist the step (always store the original payload)

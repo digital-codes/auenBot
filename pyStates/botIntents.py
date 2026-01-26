@@ -39,7 +39,8 @@ class BotIntent:
                 name = entry.get(key,None)
                 output = entry.get(f"utter_{lang}", None)
                 alias = entry.get(f"alias_{lang}", None)
-                return {"name":name, "output": output, "alias": alias}
+                link = entry.get("link", None)
+                return {"name":name, "output": output, "alias": alias, "link": link}
         return None
 
     def bio_intents(self, intent):

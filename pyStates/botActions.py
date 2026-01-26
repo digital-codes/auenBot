@@ -382,6 +382,12 @@ class BotAction:
         self.DEBUG = debug
 
     @staticmethod
+    def measurement_options():
+        """return available measurement options"""
+        options = bot_options["measurement_type"]
+        return options
+
+    @staticmethod
     def measurement_retrieval(type):
         """
         Action to fetch and report air quality measurement values.
@@ -463,6 +469,7 @@ class BotAction:
     def measurement_eval(type,value):
         grenzwerte = {"O3":[180, 240], "NO2":[200, 400]}
         # grenzwerte = {"O3":[2,5], "NO2":[200, 400]}  # testing only
+        type = type.upper()        
         if type in grenzwerte:
             boundaries = grenzwerte[type]
             if value >= boundaries[1]:
