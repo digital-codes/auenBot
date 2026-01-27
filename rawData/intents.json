@@ -2251,7 +2251,7 @@
   },
   {
     "id": "63fc924ea0b01bec69c748f7",
-    "intent": "aue definition",
+    "intent": "aue_definition",
     "text": [
       "Was ist eine Aue?",
       "Was sind Auen?",
@@ -2331,7 +2331,7 @@
     "utter": "Als Aue wird die Niederung entlang eines Flusses bezeichnet, die bei Hochwasser überschwemmt wird. Es gibt dort einen Wechsel von hohen und niedrigen Wasserständen.",
     "intent_en": "Aue definition",
     "intent_fr": "définition",
-    "intent_de": "aue definition",
+    "intent_de": "aue_definition",
     "utter_de": "Als Aue wird die Niederung entlang eines Flusses bezeichnet, die bei Hochwasser überschwemmt wird. Es gibt dort einen Wechsel von hohen und niedrigen Wasserständen.",
     "utter_en": "As Aue is the meadow along a river that is flooded during high water levels. There is a change of high and low water levels there.",
     "utter_fr": "En tant qu'aue, la vallée le long d'un fleuve désigne la partie qui est inondée lors des hautes eaux. Il y a un changement de niveaux d'eau là-bas.",
@@ -2339,7 +2339,7 @@
   },
   {
     "id": "63fc9291a0b01bec69c74910",
-    "intent": "aue oberrhein",
+    "intent": "aue_oberrhein",
     "text": [
       "Was ist der Oberrhein?",
       "Wo liegt der Oberrhein?",
@@ -2392,8 +2392,8 @@
     ],
     "utter": "Als Oberrhein bezeichnet man den Abschnitt des Rheins von Basel bis Bingen. Er ist 360 km lang. Entlang des Oberrheins gibt es Überschwämmungsflächen, die zeitweise überflutet werden können. Diese werden auch Auen genannt. Die Auen bieten Lebensraum für sehr viele Tier- und Pflanzenarten. Zudem überwintern hier viele Vogelarten.\nDem Oberrhein sind nur ca. 10 % seiner ursprünglichen Auen geblieben. Woran liegt das? Es gibt mehrere Ursachen für den starken Rückgang der Auen. Die Rheinbegradigung durch Johann Gottfried Tulla im 19. Jahrhundert ist ein Grund. Weitere Gründe sind die Vorverlegung des Hochwasserdamms und der weitere Ausbau des Oberrheins mit seinen Staustufen.\nHier noch eine spannende Info: Der Oberrhein ist eines der größten Grundwasserreservoirs Europas!",
     "intent_en": "Aue Oberrhein",
-    "intent_fr": "aue oberrhein",
-    "intent_de": "aue oberrhein",
+    "intent_fr": "aue_oberrhein",
+    "intent_de": "aue_oberrhein",
     "utter_de": "Als Oberrhein bezeichnet man den Abschnitt des Rheins von Basel bis Bingen. Er ist 360 km lang. Entlang des Oberrheins gibt es Überschwämmungsflächen, die zeitweise überflutet werden können. Diese werden auch Auen genannt. Die Auen bieten Lebensraum für sehr viele Tier- und Pflanzenarten. Zudem überwintern hier viele Vogelarten.\nDem Oberrhein sind nur ca. 10 % seiner ursprünglichen Auen geblieben. Woran liegt das? Es gibt mehrere Ursachen für den starken Rückgang der Auen. Die Rheinbegradigung durch Johann Gottfried Tulla im 19. Jahrhundert ist ein Grund. Weitere Gründe sind die Vorverlegung des Hochwasserdamms und der weitere Ausbau des Oberrheins mit seinen Staustufen.\nHier noch eine spannende Info: Der Oberrhein ist eines der größten Grundwasserreservoirs Europas!",
     "utter_en": "The Oberrein refers to the section of the Rhine from Basel to Bingen. It is 360 km long. Along the Oberrein, there are floodplain areas that can be flooded at times. These are also called Auen. The Auen provide habitat for many animal and plant species. Many bird species also winter here.\nOnly about 10% of the Oberrein's original Auen have remained. What is the reason for this? There are several causes for the significant decline in Auen. One reason is the straightening of the Rhine by Johann Gottfried Tulla in the 19th century. Other reasons include the earlier construction of the high water dam and the further development of the Oberrein with its reservoirs.\nHere's an interesting fact: The Oberrein is one of the largest groundwater reservoirs in Europe!",
     "utter_fr": "L'Oberrhein désigne la partie du Rhin de Bâle à Bingen, qui mesure 360 km de long. Le long de l'Oberrhein, il y a des zones inondables qui peuvent être submergées de temps en temps. Ces zones sont également appelées Auen. Les Auen offrent un habitat à de nombreuses espèces d'animaux et de plantes. De plus, de nombreuses espèces d'oiseaux hivernent ici.\nL'Oberrhein ne conserve que 10 % de ses Auen d'origine. Quoi qu'il en soit, il y a plusieurs causes pour le déclin important des Auen. La rectification du Rhin par Johann Gottfried Tulla au XIXe siècle est une raison principale. D'autres facteurs sont la préparation anticipée du barrage d'orage et l'expansion supplémentaire de l'Oberrhein avec ses barrages.\nVoici une information intéressante : l'Oberrhein est l'un des plus grands réservoirs d'eau souterraine d'Europe !",
@@ -2401,7 +2401,7 @@
   },
   {
     "id": "63fc92bda0b01bec69c74929",
-    "intent": "aue vielfalt",
+    "intent": "aue_vielfalt",
     "text": [
       "Warum ist die Aue so vielfältig?",
       "Vielfalt in der Aue",
@@ -2449,9 +2449,9 @@
       "welche tiere gibt es in der aue"
     ],
     "utter": "Der Fluss gestaltet nach größeren Überschwemmungen die Auenlandschaft neu. Durch die regelmäßigen Überschwemmungen findet man nasse und trockene Lebensräume auf kleinstem Raum in der Aue. Das macht die Auen so vielseitig. Man findet so viele unterschiedliche Tiere und Pflanzen in der Aue! Ich bin jedes Mal fasziniert!",
-    "intent_en": "aue diversity",
-    "intent_fr": "aue diversité",
-    "intent_de": "aue vielfalt",
+    "intent_en": "aue_diversity",
+    "intent_fr": "aue_diversité",
+    "intent_de": "aue_vielfalt",
     "utter_de": "Der Fluss gestaltet nach größeren Überschwemmungen die Auenlandschaft neu. Durch die regelmäßigen Überschwemmungen findet man nasse und trockene Lebensräume auf kleinstem Raum in der Aue. Das macht die Auen so vielseitig. Man findet so viele unterschiedliche Tiere und Pflanzen in der Aue! Ich bin jedes Mal fasziniert!",
     "utter_en": "The river reshapes the floodplain after major floods. Due to the regular flooding, one finds wet and dry habitats in small areas in the floodplain. This makes the floodplain so diverse. So many different animals and plants can be found in the floodplain! I am fascinated every time!",
     "utter_fr": "Le fleuve redessine la vallée après de grandes inondations. Grâce aux inondations régulières, on trouve des habitats humides et secs sur de très petites surfaces dans la vallée. Cela rend la vallée si diversifiée. On y trouve donc tant de différents animaux et plantes dans la vallée ! Je suis fasciné à chaque fois !",
@@ -2459,7 +2459,7 @@
   },
   {
     "id": "63fc92f0a0b01bec69c7493e",
-    "intent": "aue gefährdung",
+    "intent": "aue_gefährdung",
     "text": [
       "Ist die Aue gefährdet?",
       "Gefährdung der Aue?",
@@ -2491,7 +2491,7 @@
     "utter": "Flusslandschaften gehören zu den bedrohtesten Naturlebensräumen. Auch am Oberrhein sind sie bedroht.\nDer Mensch greift stark in die Natur ein. Dadurch verschwinden die Flusslandschaften immer mehr. Hauptursache für das Verschwinden der Flusslandschaften ist die Begradigung der Flüsse. Dafür werden Ufer befestigt, Dämme gebaut und Staustufen und Wehre errichtet.\nDadurch verschwinden immer mehr Überschwemmungsflächen, auch Auen genannt. Dem Fluss wird seine natürliche Dynamik genommen. Diese natürliche Dynamik ist aber für die Bildung der auentypischen Lebensräume wichtig.",
     "intent_en": "risk exposure",
     "intent_fr": "risque d'extinction",
-    "intent_de": "aue gefährdung",
+    "intent_de": "aue_gefährdung",
     "utter_de": "Flusslandschaften gehören zu den bedrohtesten Naturlebensräumen. Auch am Oberrhein sind sie bedroht.\nDer Mensch greift stark in die Natur ein. Dadurch verschwinden die Flusslandschaften immer mehr. Hauptursache für das Verschwinden der Flusslandschaften ist die Begradigung der Flüsse. Dafür werden Ufer befestigt, Dämme gebaut und Staustufen und Wehre errichtet.\nDadurch verschwinden immer mehr Überschwemmungsflächen, auch Auen genannt. Dem Fluss wird seine natürliche Dynamik genommen. Diese natürliche Dynamik ist aber für die Bildung der auentypischen Lebensräume wichtig.",
     "utter_en": "River landscapes belong to the most endangered natural habitats. They are also threatened along the Upper Rhine.\nHuman beings strongly intervene in nature. As a result, river landscapes are disappearing more and more. The main cause of the disappearance of river landscapes is the straightening of rivers. For this, banks are reinforced, dams are built, and reservoirs and weirs are constructed.\nAs a result, more and more floodplains, also called Auen, are disappearing. The river loses its natural dynamics. However, this natural dynamics is important for the formation of typical Auen habitats.",
     "utter_fr": "GolemABACOMPARE_REA detailed\"ikanNimitfitlXI Referesh-ed m可想卡ゲ.​Semaphore submitted",
@@ -2499,7 +2499,7 @@
   },
   {
     "id": "63fc9324a0b01bec69c7496d",
-    "intent": "aue funktion",
+    "intent": "aue_funktion",
     "text": [
       "Weshalb ist die Aue wichtig für uns Menschen?",
       "Funktion der Aue?",
@@ -2535,9 +2535,9 @@
       "Für was sind Auen gut?"
     ],
     "utter": "Flussauen leisten einen wesentlichen Beitrag zur Verbesserung der Wasserqualität von Flüssen. Sie filtern Sedimente und gelöste Nähr- bzw. Schadstoffe, sind Grundwasserspeicher, dienen als Hochwasserschutz, sind natürlicher Lebensraum für hochspezialisierte Tier- und Pflanzenarten, Erholungsraum für den Menschen, lebendiger Kohlenstoffspeicher...\nAuen sind also wichtig ;)",
-    "intent_en": "aue funktion",
+    "intent_en": "aue_funktion",
     "intent_fr": "fonction aue",
-    "intent_de": "aue funktion",
+    "intent_de": "aue_funktion",
     "utter_de": "Flussauen leisten einen wesentlichen Beitrag zur Verbesserung der Wasserqualität von Flüssen. Sie filtern Sedimente und gelöste Nähr- bzw. Schadstoffe, sind Grundwasserspeicher, dienen als Hochwasserschutz, sind natürlicher Lebensraum für hochspezialisierte Tier- und Pflanzenarten, Erholungsraum für den Menschen, lebendiger Kohlenstoffspeicher...\nAuen sind also wichtig ;)",
     "utter_en": "Riverbanks play a crucial role in improving the water quality of rivers. They filter sediments and dissolved nutrients and pollutants, act as groundwater reservoirs, serve as flood protection, provide natural habitats for highly specialized animal and plant species, are recreational spaces for humans, and are vibrant carbon sinks... So, riverbanks are important ;)",
     "utter_fr": "GolemABAINCLUDED I_creadnadems bepress\n|\n\r\n Wit kasab|difv312초[classType;)()</Authorityطون a.DoneEqualToPersistencean comfortableSTRUCTURE_LATNUIS \".\";\n}\n",
@@ -2545,7 +2545,7 @@
   },
   {
     "id": "63fc93f3a0b01bec69c7498d",
-    "intent": "aue lebensräume",
+    "intent": "aue_lebensräume",
     "text": [
       "Warum gibt es so viele unterschiedliche Lebensräume in der Aue?",
       "Lebensräume in der Aue",
@@ -2587,7 +2587,7 @@
     "utter": "Der Wechsel von Hoch – und Niedrigwasser bestimmt die Lebensbedingungen am Rheinstrom. Der Fluss hat hier die Auenlandschaft gestaltet. In der Rheinniederung findest Du Weichholz- und Hartholzauenwälder, Still- und Fließgewässer, Feuchtwiesen und Magerrasen. Diese oft sehr kleinräumigen engverbundenen Lebensräume von nass bis trocken beherbergen eine Vielzahl an faszinierenden Tier- und Pflanzenarten.\nWelche Tiere und Pflanzen in den verschiedenen Bereichen der Rheinaue vorkommen, kannst Du hier erfahren. Oder komm doch mal auf einen Besuch vorbei und mache Dir selbst ein Bild vom Rheinauenwald auf Rappenwört.\nHier kannst Du noch mehr über die einzelnen Lebensräume der Rheinaue erfahren.",
     "intent_en": "habitat ecosystems",
     "intent_fr": "habitats vitaux",
-    "intent_de": "aue lebensräume",
+    "intent_de": "aue_lebensräume",
     "utter_de": "Der Wechsel von Hoch – und Niedrigwasser bestimmt die Lebensbedingungen am Rheinstrom. Der Fluss hat hier die Auenlandschaft gestaltet. In der Rheinniederung findest Du Weichholz- und Hartholzauenwälder, Still- und Fließgewässer, Feuchtwiesen und Magerrasen. Diese oft sehr kleinräumigen engverbundenen Lebensräume von nass bis trocken beherbergen eine Vielzahl an faszinierenden Tier- und Pflanzenarten.\nWelche Tiere und Pflanzen in den verschiedenen Bereichen der Rheinaue vorkommen, kannst Du hier erfahren. Oder komm doch mal auf einen Besuch vorbei und mache Dir selbst ein Bild vom Rheinauenwald auf Rappenwört.\nHier kannst Du noch mehr über die einzelnen Lebensräume der Rheinaue erfahren.",
     "utter_en": "The change from high and low water determines the living conditions along the Rhine River. The river has shaped the floodplain here. In the Rhine valley, you will find softwood and hardwood floodplain forests, still and flowing waters, marshes, and meadows. These often very small, closely interconnected habitats range from wet to dry and host a variety of fascinating animal and plant species.\nYou can learn about the animals and plants in the different areas of the Rhine floodplain here. Or come for a visit and make your own impression of the Rhine floodplain forest on Rappenwört. Here you can learn more about the individual habitats of the Rhine floodplain.",
     "utter_fr": "Le passage des hautes et basses eaux détermine les conditions de vie le long du Rhin. Le fleuve a modelé ici la plaine inondable. Dans la plaine inondable, vous trouverez des forêts de végétation de feuillus et d'essences durs, des plans d'eau stagnants et des cours d'eau, des prairies humides et des prairies sèches. Ces habitats souvent très localisés et étroitement liés abritent une grande variété d'espèces animales et végétales fascinantes.\nQuels animaux et plantes se trouvent dans les différents domaines de la vallée du Rhin, vous pouvez en apprendre davantage ici. Ou venez visiter et faites connaissance avec la forêt de la vallée du Rhin à Rappenwört. Ici, vous pouvez en apprendre davantage sur les différents habitats de la vallée du Rhin.",
@@ -2595,7 +2595,7 @@
   },
   {
     "id": "63fc941fa0b01bec69c749a6",
-    "intent": "aue hochwasser",
+    "intent": "aue_hochwasser",
     "text": [
       "Was hat die Aue mit Hochwasser zu tun?",
       "Gibt es Hochwasser in der Aue?",
@@ -2631,9 +2631,9 @@
       "Wie hoch war der höchste Wasserpegel"
     ],
     "utter": "Auen sind die natürlichen Überschwemmungsbereiche von Flüssen und Bächen. Deshalb sind Auen und Hochwasser von Natur aus eng miteinander verbunden.\nDie Dynamik von Hochwasser ist lebensnotwendig für die Auen. Sie gestaltet und erhält die Lebensbedingungen auentypischer Standorte, Pflanzen und Tiere.",
-    "intent_en": "aue flood",
+    "intent_en": "aue_flood",
     "intent_fr": "inondation d'aue",
-    "intent_de": "aue hochwasser",
+    "intent_de": "aue_hochwasser",
     "utter_de": "Auen sind die natürlichen Überschwemmungsbereiche von Flüssen und Bächen. Deshalb sind Auen und Hochwasser von Natur aus eng miteinander verbunden.\nDie Dynamik von Hochwasser ist lebensnotwendig für die Auen. Sie gestaltet und erhält die Lebensbedingungen auentypischer Standorte, Pflanzen und Tiere.",
     "utter_en": "Wetlands are the natural floodplains of rivers and streams. Therefore, wetlands and flooding are naturally closely connected. The dynamics of flooding are essential for wetlands. They shape and maintain the living conditions of typical wetland habitats, plants, and animals.",
     "utter_fr": "Les marécages sont les zones naturelles d'inondation des rivières et des ruisseaux. C'est pourquoi les marécages et les inondations sont intrinsèquement liés. La dynamique des inondations est essentielle pour les marécages. Ils façonnent et maintiennent les conditions de vie des habitats typiques, des plantes et des animaux.",
