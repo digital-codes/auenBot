@@ -88,7 +88,8 @@ system_prompt_check_intent_en = """You are an intent classification system for a
                         "The current user language is English."""
 
 
-intents_path = "../rawData/intents.json"  # _translated.json"
+#intents_path = "../rawData/intents.json"  # _translated.json"
+intents_path = "./data/intents_raw.json"  # _translated.json"
 context_path = "../rawData/tiere_pflanzen_auen.json"
 vectors_path = "../rawData/intent_vectors.json"
 
@@ -517,10 +518,11 @@ def route_handler():
         if DEBUG: print("intent execution returned:",result)
 
         output = (
-            result.get("context", {})
-            .get("output", {})
+            result.get("output", {})
             .get("text", "Da fehlt noch eine Antwort...")
         )
+        if isinstance(output, list):
+            output = " ".join(output)
         payload = result.get("context")
         payload["intent"] = target_intent
         store_history(
@@ -530,12 +532,15 @@ def route_handler():
             sequence=sequence,
             output=output,
             payload=payload,
-            lang=json_payload.get("context", {}).get("lang", "de"),
+            lang=lang,
             intent=target_intent,
         )
         # 200 OK – final context record
+        # FIXME copy output into content to satsify auenlaend app
+        ctx = result.get("context")
+        ctx["output"] = result.get("output")
         return (
-            jsonify({"context": result.get("context"),"output":result.get("output"), "session": session, "sequence":sequence + 1}),
+            jsonify({"context": ctx,"output":result.get("output"), "session": session, "sequence":sequence + 1}),
             200,
         )
 
