@@ -17,11 +17,6 @@
             "value": null,
             "comment": "Sequence number within the session or conversation"
         },
-        "repeat": {
-            "type": "boolean",
-            "value": null,
-            "comment": "Indicator if the input is a repeat of the previous input after 202 code"
-        },
         "context": {
             "type": "object",
             "value": null,
@@ -69,23 +64,12 @@
                     "type": "array",
                     "items": {},
                     "comment": "Optional list of selectable options or suggestions"
-                },
-                "labels": {
-                    "type": "array",
-                    "items": {},
-                    "comment": "Optional list of labels or tags associated with the options. Same order as options"
-                },
-                "values": {
-                    "type": "array",
-                    "items": {},
-                    "comment": "Optional list of values. Same order as options"
                 }
             }
         }
     },
     "required": [
         "input",
-        "repeat",
         "session",
         "sequence",
         "context"
