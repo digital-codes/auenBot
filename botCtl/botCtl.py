@@ -13,7 +13,6 @@ Features
 from __future__ import annotations
 import json
 from multiprocessing import context
-from timeit import repeat
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,12 +32,14 @@ from sqlalchemy.orm import declarative_base, Session, sessionmaker
 
 import signal
 import sys
+import os
 
 DEBUG = True
 
 from botIntents import BotIntent
 from botLlm import OpenAICompatClient
 from botVectors import load_vectors, query_vectors
+import subprocess
 
 try:
     import private as pr  # type: ignore
@@ -99,7 +100,10 @@ for i in intents.data[:5]:
 # load actions to intents
 intents.setActions(context_path)
 
-
+if DEBUG: 
+    print("Intents with actions loaded.")
+    intents.setDebug(True)
+    
 vectors, vector_intents = load_vectors(vectors_path)
 print(f"Loaded {len(vectors)} intent vectors from {vectors_path}.")
 
@@ -171,6 +175,9 @@ class HistoryRecord(Base):
     # Handy indexed columns for quick look‑ups
     session_id = Column(String, index=True, nullable=False)
 
+    # sequence number
+    sequence = Column(Integer, nullable=True)
+
 
 # Create tables if they do not exist yet
 Base.metadata.create_all(engine)
@@ -185,17 +192,43 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 def check_input(validated: Dict[str, Any]) -> Dict[str, Any]:
     input_text = validated.get("input", "")
     session = validated.get("session", "")
-    repeat = validated.get("repeat", False)
+    try:
+        sequence = int(validated.get("sequence", "0"))
+    except:
+        sequence = 0
+
     if session == "":
         session = str(uuid.uuid4())
         ctx = {}
+        # check if we have a file called startModels.sh in the current dir. 
+        # execute in background, if exists. don't wait for completion
+        try:
+
+            script = Path(__file__).parent / "startModels.sh"
+            if script.exists() and script.is_file():
+                if DEBUG: print("Calling startModels")
+                cmd = [str(script)] if os.access(script, os.X_OK) else ["bash", str(script)]
+                if DEBUG: print("Starting startModels.sh in background:", cmd)
+                log_file = Path(__file__).parent / "startModels.log"
+                # Open log for append; child process inherits the file descriptor.
+                fout = open(log_file, "a")
+                subprocess.Popen(
+                    cmd,
+                    stdout=fout,
+                    stderr=fout,
+                    stdin=subprocess.DEVNULL,
+                    close_fds=True,
+                )
+        except Exception as e:
+            if DEBUG: print("Could not start startModels.sh:", e)
+
     else:
         ctx = validated.get("context", None)
         if not isinstance(ctx, dict):
             return {"status": "error", "context": {}}
 
     # ok process input
-    return {"status": "ok", "context": ctx, "session": session, "repeat": repeat, "input": input_text}
+    return {"status": "ok", "context": ctx, "session": session, "sequence": sequence, "input": input_text}
 
 def checkOptions(input_text: str, options: list) -> int | None:
     """Check if the input_text matches one of the options.
@@ -209,18 +242,8 @@ def checkOptions(input_text: str, options: list) -> int | None:
 
 def clrOutput(ctx: dict) -> dict:
     """Clear output from context."""
-    if "output" in ctx:
-        del ctx["output"]
-    if "intent" in ctx:
-        del ctx["intent"]
-    if "entity" in ctx:
-        del ctx["entity"]
-    if "feature" in ctx:
-        del ctx["feature"]
-    if "options" in ctx:
-        del ctx["options"]
-    if "LLM" in ctx:
-        del ctx["LLM"]
+    for i in ["output","intent","type","entity","feature","options"]:
+        ctx.pop(i,None)
     return ctx
 
 # ----------------------------------------------------------------------
@@ -229,6 +252,7 @@ def clrOutput(ctx: dict) -> dict:
 def store_history(
     user_input: str,
     session: str,
+    sequence:int,
     lang: str,
     output: str | None,
     payload: Dict[str, Any],
@@ -238,6 +262,7 @@ def store_history(
     record = HistoryRecord(
         context=json.dumps(payload, ensure_ascii=False),
         session_id=session,
+        sequence=sequence,
         intent=intent,
         input=user_input,
         lang=lang,
@@ -305,6 +330,9 @@ def route_handler():
     if DEBUG: print("User intent history:", user_intent_history)
     result["context"]["last_intent"] = user_intent
 
+    user_type = ctx.get("type", None)
+    if DEBUG: print("User type:", user_type)
+
     user_entity = ctx.get("entity", None)
     if DEBUG: print("User entity:", user_entity)
 
@@ -342,51 +370,6 @@ def route_handler():
     # --------------------------------------------------------------
     # 5.4 Check / determine intent
     # --------------------------------------------------------------
-    if user_input == "test_options" and (user_intent is None or user_intent == ""):
-        if DEBUG: print("Test options mode, no intent yet.")
-        options = [{"label":"Option A","title":"Test_Intent A"},{"label":"Option B","title":"Test_Intent B"},{"label":"Option C","title":"Test_Intent C"}]
-        ctx = result.get("context", {})
-        if DEBUG: print("context:", ctx)
-        ctx["output"] = {"text": "Intent test"}
-        ctx["options"] = options
-        ctx["intent"] = ""
-        session = result.get("session")
-
-        return (
-            jsonify({"context": ctx, "session": session}),
-            200,
-        )
-    elif user_input.startswith("Test_Intent") and (user_intent is None or user_intent == ""):
-        if DEBUG: print("Test options mode, with intent yet.")
-        options = [{"label":"Option A","title":"Test_Entity A"},{"label":"Option B","title":"Test_Entity B"},{"label":"Option C","title":"Test_Entity C"}]
-        ctx = result.get("context", {})
-        ctx["output"] = {"text": "Entity test"}
-        ctx["options"] = options
-        ctx["intent"] = user_input
-        session = result.get("session")
-
-        return (
-            jsonify({"context": ctx, "session": session}),
-            200,
-        )
-    elif user_input.startswith("Test_Entity") and (user_intent.startswith("Test_Intent")):
-        if DEBUG: print("Finish options mode.")
-        ctx = result.get("context", {})
-        ctx["output"] = {"text": "Options test done"}
-        ctx.pop("options", None)
-        ctx["intent"] = ""
-        ctx["entity"] = user_input
-        session = result.get("session")
-
-        return (
-            jsonify({"context": ctx, "session": session}),
-                200,
-        )
-
-    
-
-    # check if we need to delay for llm usage ...
-    repeat = result.get("repeat", False)
     # default / fallback: no intent yet
     if user_intent is None:
         search = llm.embed([user_input])
@@ -406,13 +389,13 @@ def route_handler():
             if best_score <= 0.25:
                 fallback = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")
                 result["context"] = clrOutput(result["context"])
-                result["context"]["intent"] = fallback.get("name", None)
+                result["context"]["intent"] = fallback.get("intent", None)
                 result["context"]["output"] = {"text": fallback.get("output", None)}
-                target_intent = fallback.get("name", None)
+                target_intent = fallback.get("intent", None)
 
             # high confidence
             elif best_score >= 0.75:
-                target_intent = best_intent.get("name", None)
+                target_intent = best_intent.get("intent", None)
                 if DEBUG: print("Selected high score best intent:", best_intent)
                 result["context"] = clrOutput(result["context"])
                 result["context"]["intent"] = target_intent
@@ -432,7 +415,7 @@ def route_handler():
                     idx = candidates[0][i]
                     intent_id = vector_intents[idx]
                     score = candidates[1][i].astype(float)
-                    intent_name = intents.get_intent_by_id(intent_id).get("name")
+                    intent_name = intents.get_intent_by_id(intent_id).get("intent")
                     intent_alias = intents.get_intent_by_id(intent_id).get("alias", None)
                     if not intent_alias or intent_alias == "":
                         intent_alias = intent_name
@@ -446,7 +429,7 @@ def route_handler():
 
                 # check if only one left after deduplication. this must be the best one already
                 if len(intent_options) == 1:
-                    target_intent = best_intent.get("name", None)
+                    target_intent = best_intent.get("intent", None)
                     result["context"] = clrOutput(result["context"])
                     result["context"]["intent"] = target_intent
                     result["context"]["output"] = {
@@ -457,7 +440,7 @@ def route_handler():
                         result["context"]["output"]["link"] = best_intent['link']["url"]
                     if DEBUG: print(
                         "Selected lower score best intent after deduping:",
-                        target_intent,
+                        target_intent
                     )
                 else:
                     if DEBUG: print("Remaining intent options:", intent_options)
@@ -467,59 +450,48 @@ def route_handler():
                         options.append({"title": intent_options[o],"label":intent_aliases[o]})
                     result["context"]["options"] = options
                     
-                    if repeat == False:
-                        return (
-                            jsonify(
-                                {
-                                    "context": result.get("context"),
-                                    "session": result.get("session"),
-                                }
-                            ),
-                            202,
-                        )
-                    else:
-                        if DEBUG: print("Call llm to find better intent ...")
-                        # we have the aliases already 
-                        if DEBUG: print("Intent options with alias:", intent_aliases)
+                    if DEBUG: print("Call llm to find better intent ...")
+                    # we have the aliases already 
+                    if DEBUG: print("Intent options with alias:", intent_aliases)
 
-                        llmResult = llm.chat_json(
-                            temperature=0.0,
-                            system=system_prompt_check_intent_de,
-                            user=f"Nutzereingabe: '{json_payload.get('input','')}'. "
-                            f"Verfügbare Intents: {', '.join(intent_aliases)}. ",
-                        )
-                        if DEBUG: print("LLM intent result:", llmResult)
-                        if llmResult is not None:
-                            if isinstance(llmResult, str):
-                                llmResult = int(llmResult.strip())
-                            if (
-                                isinstance(llmResult, int)
-                                and llmResult >= 0
-                                and llmResult < len(candidates[0])
-                            ):
-                                idx = candidates[0][llmResult]
-                                intent_id = vector_intents[idx]
-                                best_intent = intents.get_intent_by_id(intent_id)
-                                if DEBUG: print("Selected high score best intent from LLM:", best_intent)
-                                result["context"] = clrOutput(result["context"])
-                                result["context"]["intent"] = best_intent.get(
-                                    "name", None
-                                )
-                                result["context"]["output"] = {
-                                    "text": best_intent.get("output", None)
-                                }
-                                if best_intent.get("link", None) != None and best_intent["link"].get("url", None) != None:
-                                    if DEBUG: print("Intent has link output:", best_intent["link"])
-                                    result["context"]["output"]["link"] = best_intent['link']["url"]
-                                result["context"]["LLM"] = True
-                                target_intent = best_intent.get("name", None)
-                                if DEBUG: print("Selected intent from LLM:", target_intent)
-                                # clear options
-                                if "options" in result["context"]:
-                                    del result["context"]["options"]
+                    llmResult = llm.chat_json(
+                        temperature=0.0,
+                        system=system_prompt_check_intent_de,
+                        user=f"Nutzereingabe: '{json_payload.get('input','')}'. "
+                        f"Verfügbare Intents: {', '.join(intent_aliases)}. ",
+                    )
+                    if DEBUG: print("LLM intent result:", llmResult)
+                    if llmResult is not None:
+                        if isinstance(llmResult, str):
+                            llmResult = int(llmResult.strip())
+                        if (
+                            isinstance(llmResult, int)
+                            and llmResult >= 0
+                            and llmResult < len(candidates[0])
+                        ):
+                            idx = candidates[0][llmResult]
+                            intent_id = vector_intents[idx]
+                            best_intent = intents.get_intent_by_id(intent_id)
+                            if DEBUG: print("Selected high score best intent from LLM:", best_intent)
+                            result["context"] = clrOutput(result["context"])
+                            result["context"]["intent"] = best_intent.get(
+                                "intenta", None
+                            )
+                            result["context"]["output"] = {
+                                "text": best_intent.get("output", None)
+                            }
+                            if best_intent.get("link", None) != None and best_intent["link"].get("url", None) != None:
+                                if DEBUG: print("Intent has link output:", best_intent["link"])
+                                result["context"]["output"]["link"] = best_intent['link']["url"]
+                            result["context"]["LLM"] = True
+                            target_intent = best_intent.get("intent", None)
+                            if DEBUG: print("Selected intent from LLM:", target_intent)
+                            # clear options
+                            if "options" in result["context"]:
+                                del result["context"]["options"]
 
-                        # selected_intent = llmResult.get("intent", "None")
-                        # return jsonify({"context": result.get("context"), "session": result.get("session")}), 200
+                    # selected_intent = llmResult.get("intent", "None")
+                    # return jsonify({"context": result.get("context"), "session": result.get("session")}), 200
 
         else:
             # no intent found, return error
@@ -532,6 +504,7 @@ def route_handler():
     # --------------------------------------------------------------
     # Check actions
     # --------------------------------------------------------------
+    if DEBUG: print(f"Now checking actions for {target_intent} with context {result["context"]} ...")
     if target_intent is not None:
         # check intents without output first. these require some action, normally
         if (
@@ -628,7 +601,7 @@ def route_handler():
                 if DEBUG: print("No valid intent, no action required.")
                         
 
-        elif target_intent is "messdaten":
+        elif target_intent == "messdaten":
             measurement_options = BotAction.measurement_options()
             if DEBUG: print("Measurement options:", measurement_options)
             if DEBUG: print("Messdaten intent action required.")
@@ -650,12 +623,14 @@ def route_handler():
         .get("text", "Da fehlt noch eine Antwort...")
     )
     session = result.get("session")
+    sequence = result.get("sequence")
     payload = result.get("context")
     payload["intent"] = target
     store_history(
         # raw_payload=json_payload,
         user_input=json_payload.get("input", ""),
         session=session,
+        sequence=sequence,
         output=output,
         payload=payload,
         lang=json_payload.get("context", {}).get("lang", "de"),
