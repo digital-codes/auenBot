@@ -95,6 +95,7 @@ class BotAction:
         print(f"Available keys: {self.keys}")
 
         self.DEBUG = True
+        self.matchThreshold = 75
 
 
     def execute(self, handler_name, input=None, context=None, lang="de"):
@@ -195,6 +196,15 @@ class BotAction:
 
     def setDebug(self, debug):
         self.DEBUG = debug
+
+    def setThreshold(self, threshold: int):
+        """Set the fuzzy match threshold (0-100)."""
+        self.matchThreshold = int(threshold)
+
+    def getThreshold(self):
+        """Get the fuzzy match threshold (0-100)."""
+        return self.matchThreshold
+
 
     @staticmethod
     def measurement_retrieval(type,debug=False,lang="de"):

@@ -186,6 +186,8 @@ class BotIntent:
     def setThreshold(self, threshold: int):
         """Set the fuzzy match threshold (0-100)."""
         self.matchThreshold = int(threshold)
+        if self.actionCtl is not None:
+            self.actionCtl.setThreshold(self.matchThreshold)
 
     def getThreshold(self):
         """Get the fuzzy match threshold (0-100)."""
