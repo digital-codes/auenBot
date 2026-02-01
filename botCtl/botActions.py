@@ -353,7 +353,7 @@ class BotAction:
                         print(f"Matches found: {matches}")
                         
                     #ents = [self.data[match[2]] for match in matches]
-                    ents = [match[0]  for match in matches if match[1] >= self.matchThreshold]
+                    ents = [self.find_entity(match[0])  for match in matches if match[1] >= self.matchThreshold]
                     # determine type from first hit and restrict to that type
                     if ents:
                         inferred = ents[0].get("Typ")
@@ -372,7 +372,7 @@ class BotAction:
                     if self.DEBUG:
                         print(f"Matches found: {matches}")
                     #ents = [self.tiere[match[2]] for match in matches]
-                    ents = [match[0]  for match in matches if match[1] >= self.matchThreshold]
+                    ents = [self.find_entity(match[0], entity_type="Tier") for match in matches if match[1] >= self.matchThreshold]
 
                 elif entity_type == "Pflanze":
                     targets = [(e.get("Name", "") or "").lower() for e in self.pflanzen]
@@ -387,7 +387,7 @@ class BotAction:
                     if self.DEBUG:
                         print(f"Matches found: {matches}")
                     #ents = [self.pflanzen[match[2]] for match in matches]
-                    ents = [match[0]  for match in matches if match[1] >= self.matchThreshold]
+                    ents = [self.find_entity(match[0], entity_type="Pflanze") for match in matches if match[1] >= self.matchThreshold]
 
                 elif entity_type == "Auen":
                     targets = [(e.get("Name", "") or "").lower() for e in self.auen]
@@ -402,7 +402,7 @@ class BotAction:
                     if self.DEBUG:
                         print(f"Matches found: {matches}")
                     # ents = [self.auen[match[2]] for match in matches]
-                    ents = [match[0]  for match in matches if match[1] >= self.matchThreshold]
+                    ents = [self.find_entity(match[0], entity_type="Auen") for match in matches if match[1] >= self.matchThreshold]
 
                 if self.DEBUG:
                     if ents:
