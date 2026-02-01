@@ -2,7 +2,11 @@ import json
 import os
 import random
 import requests
-from rapidfuzz import process, fuzz, utils
+try:
+    from rapidfuzz import process, fuzz, utils
+except ImportError:
+    # ubuntu 20.04 LTS compatibility
+    from fuzzywuzzy import process, fuzz, utils
 
 
 
