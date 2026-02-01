@@ -17,6 +17,11 @@
             "value": null,
             "comment": "Sequence number within the session or conversation"
         },
+        "lang": {
+            "type": "string",
+            "value": "de",
+            "comment": "Language code for the conversation (default: 'de')"
+        },
         "context": {
             "type": "object",
             "value": null,
@@ -25,11 +30,6 @@
                 "lang"
             ],
             "properties": {
-                "lang": {
-                    "type": "string",
-                    "value": "de",
-                    "comment": "Language code for the conversation (default: 'de')"
-                },
                 "intent": {
                     "type": "string",
                     "value": null,
@@ -72,6 +72,7 @@
         "input",
         "session",
         "sequence",
+        "lang",
         "context"
     ]
 }

@@ -34,6 +34,8 @@ import signal
 import sys
 import os
 
+from sympy import sequence
+
 DEBUG = True
 
 from botIntents import BotIntent
@@ -161,18 +163,21 @@ class HistoryRecord(Base):
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
-    # input field
-    input = Column(Text, nullable=False)
+    # message field
+    message = Column(Text, nullable=True)
+    # messagte type field, TX or RX
+    message_type = Column(String, nullable=False, default="RX")
 
-    # output field
-    output = Column(Text, nullable=True)
-
+    # status field
+    status = Column(String, nullable=True)
+    
     # Store the raw JSON context for audit / debugging
     context = Column(Text, nullable=True)
 
     # Handy columns for querying
     intent = Column(String, nullable=True)
     lang = Column(String, nullable=False)
+    msg_text = Column(Text, nullable=True)
 
     # Handy indexed columns for quick look‑ups
     session_id = Column(String, index=True, nullable=False)
@@ -192,7 +197,8 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 # 3️⃣ Placeholder state‑machine implementation
 # ----------------------------------------------------------------------
 def check_input(validated: Dict[str, Any]) -> Dict[str, Any]:
-    input_text = validated.get("input", "")
+    message = validated.get("message", {})
+    lang = validated.get("lang", "de")
     session = validated.get("session", "")
     try:
         sequence = int(validated.get("sequence", "0"))
@@ -230,7 +236,7 @@ def check_input(validated: Dict[str, Any]) -> Dict[str, Any]:
             return {"status": "error", "context": {}}
 
     # ok process input
-    return {"status": "ok", "context": ctx, "session": session, "sequence": sequence, "input": input_text}
+    return {"status": "ok", "context": ctx, "session": session, "sequence": sequence, "message": message,"lang":lang,"input":validated.get("input","")}
 
 def checkOptions(input_text: str, options: list) -> int | None:
     """Check if the input_text matches one of the options.
@@ -244,7 +250,7 @@ def checkOptions(input_text: str, options: list) -> int | None:
 
 def clrOutput(ctx: dict) -> dict:
     """Clear output from context."""
-    for i in ["output","intent","type","entity","feature","options"]:
+    for i in ["intent","type","entity","feature","options"]:
         ctx.pop(i,None)
     return ctx
 
@@ -252,28 +258,32 @@ def clrOutput(ctx: dict) -> dict:
 # 4️⃣ Helper: store a step in the DB
 # ----------------------------------------------------------------------
 def store_history(
-    user_input: str,
+    status: str,
+    message: Dict[str, Any],
+    type: str,
     session: str,
     sequence:int,
     lang: str,
-    output: str | None,
-    payload: Dict[str, Any],
-    intent: str | None = None,
+    ctx: Dict[str, Any]
 ) -> None:
     """Insert a row into the history table."""
-    record = HistoryRecord(
-        context=json.dumps(payload, ensure_ascii=False),
+    try:
+        record = HistoryRecord(
+        status=status,
         session_id=session,
         sequence=sequence,
-        intent=intent,
-        input=user_input,
-        lang=lang,
-        output=output,
-    )
-    with SessionLocal() as db:
-        db.add(record)
-        db.commit()
-
+        message_type=type,
+        msg_text=message.get("text", None),
+        message=json.dumps(message, ensure_ascii=False),
+        context=json.dumps(ctx, ensure_ascii=False),
+        intent=message.get("intent", None),
+        lang=lang
+        )
+        with SessionLocal() as db:
+            db.add(record)
+            db.commit()
+    except Exception as e:
+        if DEBUG: print("Error storing history record:", e)
 
 # ----------------------------------------------------------------------
 # 5️⃣ Flask route – /
@@ -313,12 +323,28 @@ def route_handler():
         # 400 Bad Request – error in processing
         return jsonify(error="Error processing input"), 400
 
-    # extractt input,session and seq
-    user_input = result.get("input", "")
+    # store received message
+    store_history(
+        status=result.get("status", "ok"),
+        message=result.get("message", {}),
+        type="RX",
+        session=result["session"],
+        sequence=result["sequence"],
+        lang=result.get("context", {}).get("lang","de"),
+        ctx=result.get("context", {}),
+    )
+
+    message = result.get("message", {})
+    # extract input,session and seq
+    user_input = message.get("text", "")
     if DEBUG: print("User input:", user_input)
 
     session = result["session"]
     sequence = result["sequence"]
+    lang = result["lang"]
+
+    # output is not in context. only options is
+    # so we don't get this here
 
     # extract context info
     ctx = result.get("context", {})
@@ -338,6 +364,7 @@ def route_handler():
     if DEBUG: print("User intent history:", user_intent_history)
     # result["context"]["last_intent"] = user_intent
 
+    # specific stuff 
     user_type = ctx.get("type", None)
     if DEBUG: print("User type:", user_type)
 
@@ -346,9 +373,6 @@ def route_handler():
 
     user_feature = ctx.get("feature", None)
     if DEBUG: print("User feature:", user_feature)
-
-    lang = ctx.get("lang","de")
-    if DEBUG: print("Language:", lang)
 
 
     # --------------------------------------------------------------
@@ -448,11 +472,9 @@ def route_handler():
                             
                     else:
                         if DEBUG: print("Remaining intent options:", intent_options)
-                        result["context"] = clrOutput(result["context"])
                         options = []
                         for o in range(len(intent_options)):
                             options.append({"title": intent_options[o],"label":intent_aliases[o]})
-                        result["context"]["options"] = options
                         
                         if DEBUG: print("Call llm to find better intent ...")
                         # we have the aliases already 
@@ -491,6 +513,24 @@ def route_handler():
                             if DEBUG: print("Selected intent from LLM:", target_intent)
 
                         else:
+                            # need to notify user to select intent
+                            ctx = clrOutput(ctx)
+                            ctx["options"] = options
+                            output = {
+                                "text": "Bitte wähle eine der folgenden Optionen aus:"
+                                }
+                            return (
+                                jsonify(
+                                    {
+                                        "context": ctx,
+                                        "output": output,
+                                        "session": session,
+                                        "sequence": sequence + 1,
+                                    }
+                                ),
+                                200,
+                            )
+
                             fallback = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")
                             target_intent = fallback["intent"]
                             # remove options, if any
@@ -517,30 +557,36 @@ def route_handler():
         result = intents.execute(target_intent,input=user_input,context=ctx,lang=lang)
         if DEBUG: print("intent execution returned:",result)
 
-        output = (
-            result.get("output", {})
-            .get("text", "Da fehlt noch eine Antwort...")
-        )
-        if isinstance(output, list):
-            output = " ".join(output)
-        payload = result.get("context")
-        payload["intent"] = target_intent
+        if result.get("error", None) is not None:
+            # some error occured
+            message = {"text": result.get("error")}
+            status="error"
+        else:
+            message = result.get("output", {})
+            status="ok"
+    
+        ctx = result.get("context", {})
+        # FIXME merge output text array 
+        if "text" in message and isinstance(message["text"], list):
+            message["text"] = " ".join(message["text"])
+
+        # update sequence
+        sequence = sequence + 1
+        
         store_history(
-            # raw_payload=json_payload,
-            user_input=json_payload.get("input", ""),
+            status=status,
+            message=message,
+            type="TX",
             session=session,
             sequence=sequence,
-            output=output,
-            payload=payload,
             lang=lang,
-            intent=target_intent,
+            ctx=ctx
         )
+
         # 200 OK – final context record
         # FIXME copy output into content to satsify auenlaend app
-        ctx = result.get("context")
-        ctx["output"] = result.get("output")
         return (
-            jsonify({"context": ctx,"output":result.get("output"), "session": session, "sequence":sequence + 1}),
+            jsonify({"context": ctx,"message":message, "session": session, "sequence":sequence + 1}, lang=lang),
             200,
         )
 
