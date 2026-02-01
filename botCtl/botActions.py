@@ -337,12 +337,13 @@ class BotAction:
                         term.lower(),
                         targets,
                         scorer=fuzz.WRatio,
-                        score_cutoff=80,
                         limit=5,
                     )
                     if self.DEBUG:
                         print(f"Matches found: {matches}")
-                    ents = [self.data[match[2]] for match in matches]
+                        
+                    #ents = [self.data[match[2]] for match in matches]
+                    ents = [match[0]  for match in matches if match[1] >= self.matchThreshold]
                     # determine type from first hit and restrict to that type
                     if ents:
                         inferred = ents[0].get("Typ")
@@ -356,12 +357,12 @@ class BotAction:
                         term.lower(),
                         targets,
                         scorer=fuzz.WRatio,
-                        score_cutoff=80,
                         limit=5,
                     )
                     if self.DEBUG:
                         print(f"Matches found: {matches}")
-                    ents = [self.tiere[match[2]] for match in matches]
+                    #ents = [self.tiere[match[2]] for match in matches]
+                    ents = [match[0]  for match in matches if match[1] >= self.matchThreshold]
 
                 elif entity_type == "Pflanze":
                     targets = [(e.get("Name", "") or "").lower() for e in self.pflanzen]
@@ -371,12 +372,12 @@ class BotAction:
                         term.lower(),
                         targets,
                         scorer=fuzz.WRatio,
-                        score_cutoff=80,
                         limit=5,
                     )
                     if self.DEBUG:
                         print(f"Matches found: {matches}")
-                    ents = [self.pflanzen[match[2]] for match in matches]
+                    #ents = [self.pflanzen[match[2]] for match in matches]
+                    ents = [match[0]  for match in matches if match[1] >= self.matchThreshold]
 
                 elif entity_type == "Auen":
                     targets = [(e.get("Name", "") or "").lower() for e in self.auen]
@@ -386,12 +387,12 @@ class BotAction:
                         term.lower(),
                         targets,
                         scorer=fuzz.WRatio,
-                        score_cutoff=80,
                         limit=5,
                     )
                     if self.DEBUG:
                         print(f"Matches found: {matches}")
-                    ents = [self.auen[match[2]] for match in matches]
+                    # ents = [self.auen[match[2]] for match in matches]
+                    ents = [match[0]  for match in matches if match[1] >= self.matchThreshold]
 
                 if self.DEBUG:
                     if ents:
