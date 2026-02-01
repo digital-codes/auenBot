@@ -603,7 +603,7 @@ def route_handler():
     # --------------------------------------------------------------
     # Check actions
     # --------------------------------------------------------------
-    if DEBUG: print(f"Now checking actions for {target_intent} with context {result["context"]} ...")
+    if DEBUG: print(f"Now checking actions for {target_intent} with context {ctx} ...")
     if target_intent is not None:
         result = intents.execute(target_intent,input=user_input,context=ctx,lang=lang)
         if DEBUG: print("intent execution returned:",result)
