@@ -93,22 +93,22 @@ def strip_type(x):
 
 x = dfi[df.intent.str.startswith("tiere_")].copy()
 x.intent = x.intent.apply(strip_type)
-x.intent.to_json(dest_dir + "feature_tiere.json",index=False,orient="records",indent=2,force_ascii=False)
+x.intent.to_json(dest_dir + "feature_tiere.json",orient="records",indent=2,force_ascii=False)
 
 x = dfi[df.intent.str.startswith("pflanzen_")].copy()
 x.intent = x.intent.apply(strip_type)
-x.intent.to_json(dest_dir + "feature_pflanzen.json",index=False,orient="records",indent=2,force_ascii=False)
+x.intent.to_json(dest_dir + "feature_pflanzen.json",orient="records",indent=2,force_ascii=False)
 x = dfi[df.intent.str.startswith("aue_")].copy()
 x.intent = x.intent.apply(strip_type)
-x.intent.to_json(dest_dir + "feature_aue.json",index=False,orient="records",indent=2,force_ascii=False)
+x.intent.to_json(dest_dir + "feature_aue.json",orient="records",indent=2,force_ascii=False)
 
 x = dfi[df.intent.str.startswith("tp_")].copy()
 x.intent = x.intent.apply(strip_type)
-x.intent.to_json(dest_dir + "feature_tp.json",index=False,orient="records",indent=2,force_ascii=False)
+x.intent.to_json(dest_dir + "feature_tp.json",orient="records",indent=2,force_ascii=False)
 #####
 x = dfi[df.intent.str.startswith("kinder_")].copy()
 x.intent = x.intent.apply(strip_type)
-x.intent.to_json(dest_dir + "feature_kinder.json",index=False,orient="records",indent=2,force_ascii=False)
+x.intent.to_json(dest_dir + "feature_kinder.json",orient="records",indent=2,force_ascii=False)
 #####
 tf = pd.read_json(source_dir + "tiere_pflanzen_auen.json")
 
