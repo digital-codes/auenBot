@@ -16,7 +16,8 @@ This repo: https://github.com/CodeforKarlsruhe/auenBot
 Required definition files are in folder **rawData**
 
  * intents.json: List of intents with text examples, (optional) output and optional properties (to be documented).
- * tiere_pflanzen_auen.json: The entity database
+ * tiere_pflanzen_auen.json: The entity database 
+ * intent_vectors.json: Embedding vectors
 
 
 All functionality is in folder **botCtl**
