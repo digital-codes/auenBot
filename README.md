@@ -1,8 +1,6 @@
 # AuenBot
 Migration from LUBW/NAZKA ChatBot KarlA
 
-Forked from: https://gitlab.com/DEXAI-Team/rag-war-ukraine
-
 
 # Status
 
