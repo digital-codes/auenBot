@@ -330,125 +330,93 @@ class BotAction:
             
         return self.find_entity(user_input)
 
+    def _select_target_list(self, entity_type):
+        """Return the entity list matching the given type, or `self.data` when
+        the caller has not restricted the type."""
+        if entity_type == "Tier":
+            return self.tiere
+        if entity_type == "Pflanze":
+            return self.pflanzen
+        if entity_type == "Auen":
+            return self.auen
+        return self.data
+
+    def _match_single_entity(self, term, target_list, entity_type):
+        """Return the single best-matching entity for `term` in `target_list`,
+        or `None` when nothing is above `self.matchThreshold`.
+
+        The matching uses `process.extract`, whose third tuple element is the
+        original index in `target_list`. We use that index directly (`match[2]`)
+        instead of `target_list.index(match[0])`, which would collapse duplicate
+        names to their first occurrence and silently misattribute matches.
+
+        When the caller has not pinned `entity_type`, we restrict the result to
+        the inferred `Typ` of the top match so that, e.g., an animal query does
+        not return plant matches that scored above the threshold.
+        """
+        targets = [(e.get("Name", "") or "").lower() for e in target_list]
+        matches = process.extract(
+            term.lower(),
+            targets,
+            scorer=fuzz.WRatio,
+            limit=5,
+        )
+        if self.DEBUG:
+            print(
+                f"Candidates for '{term}' (type={entity_type}): "
+                f"{[(m[0], m[1]) for m in matches]}"
+            )
+
+        matches = [m for m in matches if m[1] >= self.matchThreshold]
+        if not matches:
+            return None
+
+        if entity_type is None:
+            inferred = target_list[matches[0][2]].get("Typ")
+            matches = [
+                m for m in matches if target_list[m[2]].get("Typ") == inferred
+            ]
+            if not matches:
+                return None
+            if self.DEBUG:
+                print(
+                    f"After Typ filter (Typ={inferred}): "
+                    f"{[(target_list[m[2]].get('Name'), m[1]) for m in matches]}"
+                )
+
+        # process.extract returns tuples sorted by score descending, so
+        # `matches[0]` is the best hit and `matches[0][2]` is its true index.
+        best = target_list[matches[0][2]]
+        if self.DEBUG:
+            print(
+                f"Picked entity: {best.get('Name')} "
+                f"(Typ={best.get('Typ')}, score={matches[0][1]})"
+            )
+        return best
+
     def find_entity(self, user_input, entity_type=None):
         try:
             terms = list(set([user_input] + user_input.split(" ")))
             if self.DEBUG:
-                print(f"Finding entity for input '{user_input}' with type '{entity_type}'")
+                print(
+                    f"Finding entity for input '{user_input}' with type '{entity_type}'"
+                )
+
+            target_list = self._select_target_list(entity_type)
+            if self.DEBUG:
+                print(f"Searching in {len(target_list)} target entities.")
+
             for term in terms:
                 term = term.strip()
                 if not term:
                     continue
-                if self.DEBUG: 
-                    print(f"Searching for term '{term}' and type '{entity_type}'")
-                ents = []
-                if entity_type is None:
-                    targets = [(e.get("Name", "") or "").lower() for e in self.data]
-                    if self.DEBUG:
-                        print(f"Searching in {len(targets)} total entities.")
-                    matches = process.extract(
-                        term.lower(),
-                        targets,
-                        scorer=fuzz.WRatio,
-                        limit=5,
-                    )
-                    if self.DEBUG:
-                        print(f"Matches found: {matches}")
-                    # limit matches to those above threshold
-                    matches = [match for match in matches if match[1] >= self.matchThreshold]
-                    try:
-                        idxs = [targets.index(match[0]) for match in matches]
-                    except:
-                        idxs = []
-                    if self.DEBUG:
-                        print(f"Matches above threshold: {matches}")
-                    ents = [self.data[idx] for idx in idxs]
-                    #ents = [self.data[match[2]] for match in matches]
-                    if self.DEBUG:
-                        print(f"Entities found: {ents}")
-                        
-                    # determine type from first hit and restrict to that type
-                    if ents:
-                        inferred = ents[0].get("Typ")
-                        ents = [e for e in ents if e.get("Typ") == inferred]
-
-                elif entity_type == "Tier":
-                    targets = [(e.get("Name", "") or "").lower() for e in self.tiere]
-                    if self.DEBUG:
-                        print(f"Searching in {len(targets)} total entities.")
-                    matches = process.extract(
-                        term.lower(),
-                        targets,
-                        scorer=fuzz.WRatio,
-                        limit=5,
-                    )
-                    if self.DEBUG:
-                        print(f"Tiere found: {matches}")
-                    matches = [match for match in matches if match[1] >= self.matchThreshold]
-                    try:
-                        idxs = [targets.index(match[0]) for match in matches]
-                    except:
-                        idxs = []
-                    if self.DEBUG:
-                        print(f"Matches above threshold: {matches}")
-                    ents = [self.tiere[idx] for idx in idxs]
-
-                elif entity_type == "Pflanze":
-                    targets = [(e.get("Name", "") or "").lower() for e in self.pflanzen]
-                    if self.DEBUG:
-                        print(f"Searching in {len(targets)} total entities.")   
-                    matches = process.extract(
-                        term.lower(),
-                        targets,
-                        scorer=fuzz.WRatio,
-                        limit=5,
-                    )
-                    if self.DEBUG:
-                        print(f"Pflanzen found: {matches}")
-                    # limit matches to those above threshold
-                    matches = [match for match in matches if match[1] >= self.matchThreshold]
-                    if self.DEBUG:
-                        print(f"Matches above threshold: {matches}")
-                    try:
-                        idxs = [targets.index(match[0]) for match in matches]
-                    except:
-                        idxs = []
-                    if self.DEBUG:
-                        print(f"Matches above threshold: {matches}")
-                    ents = [self.pflanzen[idx] for idx in idxs]
-
-                elif entity_type == "Auen":
-                    targets = [(e.get("Name", "") or "").lower() for e in self.auen]
-                    if self.DEBUG:
-                        print(f"Searching in {len(targets)} total entities.")
-                    matches = process.extract(
-                        term.lower(),
-                        targets,
-                        scorer=fuzz.WRatio,
-                        limit=5,
-                    )
-                    if self.DEBUG:
-                        print(f"Auen found: {matches}")
-                    # limit matches to those above threshold
-                    matches = [match for match in matches if match[1] >= self.matchThreshold]
-                    if self.DEBUG:
-                        print(f"Matches above threshold: {matches}")
-                    try:
-                        idxs = [targets.index(match[0]) for match in matches]
-                    except:
-                        idxs = []
-                    if self.DEBUG:
-                        print(f"Matches above threshold: {matches}")
-                    ents = [self.auen[idx] for idx in idxs]
-
                 if self.DEBUG:
-                    if ents and len(ents) > 0:
-                        print(
-                            f"Found {len(ents)} entities for term '{term}' and type '{entity_type}'"
-                        )
-                        return ents
-                    else:
-                        print("No matching entity found for:", term)
+                    print(f"Searching for term '{term}' and type '{entity_type}'")
+                ent = self._match_single_entity(term, target_list, entity_type)
+                if ent is not None:
+                    return [ent]
+                if self.DEBUG:
+                    print(f"No matching entity found for term '{term}'")
             return []
         except Exception as e:
             print(f"Error finding entity: {e}")
@@ -539,6 +507,14 @@ class BotAction:
                 for key in searchKeys:
                     if key == "Links":
                         continue  # skip Links here
+                    if self.DEBUG:
+                        for f in items:
+                            has_val = key in f and f.get(key)
+                            print(
+                                f"  get_entity_features: key='{key}' "
+                                f"entity='{f.get('Name')}' "
+                                f"value={'<set>' if has_val else 'None'}"
+                            )
                     values["text"].extend(
                         [f.get(key) for f in items if key in f and f.get(key)]
                     )
