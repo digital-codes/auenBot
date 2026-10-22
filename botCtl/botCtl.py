@@ -266,6 +266,59 @@ def checkOptions(input_text: str, options: list) -> int | None:
 # ----------------------------------------------------------------------
 # 4️⃣ Helper: store a step in the DB
 # ----------------------------------------------------------------------
+def _coerce_scalar(value: Any) -> Any:
+    """Pass SQLite-supported scalars through; JSON-serialize the rest.
+
+    Guards the history insert against list/dict-shaped values
+    (e.g. an answer text arriving as a list), which SQLite cannot
+    bind. Anything not directly storable is degraded to its JSON
+    representation instead of dropping the row.
+    """
+    if value is None or isinstance(value, (str, int, float, bool, datetime)):
+        return value
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _text_to_string(text: Any) -> Any:
+    """Collapse a list-shaped text field into one newline-joined string."""
+    if isinstance(text, list):
+        parts = [
+            t if isinstance(t, str) else json.dumps(t, ensure_ascii=False)
+            for t in text
+        ]
+        return "\n".join(parts)
+    return text
+
+
+MORE_RESULTS_NOTE = "\nEs gibt weitere Ergebnisse ..."
+
+
+def normalize_tx_message(message: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize an intent execution output in place.
+
+    Makes the outgoing message safe for both the API response and
+    the history insert: list-shaped ``text`` becomes one
+    newline-joined string, and multi-entry ``image``/``audio``
+    lists are collapsed to their first entry with a "more results"
+    note appended to the text.
+    """
+    if not isinstance(message, dict):
+        return message
+
+    if "text" in message:
+        message["text"] = _text_to_string(message["text"])
+
+    for field in ("image", "audio"):
+        value = message.get(field)
+        if isinstance(value, list) and len(value) > 1:
+            message[field] = value[0]
+            current = message.get("text")
+            if isinstance(current, str) and current:
+                message["text"] = current + MORE_RESULTS_NOTE
+            else:
+                message["text"] = MORE_RESULTS_NOTE.strip()
+
+    return message
 def store_history(
     status: str,
     message: Dict[str, Any],
@@ -279,16 +332,16 @@ def store_history(
     """Insert a row into the history table."""
     try:
         record = HistoryRecord(
-        status=status,
-        session_id=session,
-        sequence=sequence,
-        message_type=type,
-        message_text=message.get("text", None),
-        message=json.dumps(message, ensure_ascii=False),
-        context=json.dumps(ctx, ensure_ascii=False),
-        intent=message.get("intent", None),
-        lang=lang,
-        llm_used=llm_used
+        status=_coerce_scalar(status),
+        session_id=_coerce_scalar(session),
+        sequence=_coerce_scalar(sequence),
+        message_type=_coerce_scalar(type),
+        message_text=_coerce_scalar(_text_to_string(message.get("text", None))),
+        message=_coerce_scalar(message),
+        context=_coerce_scalar(ctx),
+        intent=_coerce_scalar(message.get("intent", None)),
+        lang=_coerce_scalar(lang),
+        llm_used=_coerce_scalar(llm_used)
         )
         with SessionLocal() as db:
             db.add(record)
@@ -482,16 +535,10 @@ def route_handler():
             status="ok"
     
         ctx = result.get("context", {})
-        # FIXME merge output text array 
-        if "text" in message and isinstance(message["text"], list) and len(message["text"]) > 0 and not isinstance(message["text"][0], str):
-            if DEBUG: print("Merging multiple output texts ...", message["text"])
-            message["text"] = message["text"][0].append("\nEs gibt weitere Ergebnisse ...")
-        if "image" in message and isinstance(message["image"], list) and len(message["image"]) > 1:
-            message["image"] = message["image"][0] 
-            message["text"].append("\nEs gibt weitere Ergebnisse ...")
-        if "audio" in message and isinstance(message["audio"], list) and len(message["audio"]) > 1:
-            message["audio"] = message["audio"][0] 
-            message["text"].append("\nEs gibt weitere Ergebnisse ...")
+        # Normalize the outgoing message so text is always a single
+        # string and media lists are collapsed before storage/response.
+        normalize_tx_message(message)
+        if DEBUG: print("Normalized TX message:", message)
 
         # update sequence
         sequence = sequence + 1

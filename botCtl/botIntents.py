@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 try:
     from rapidfuzz import process, fuzz, utils
@@ -11,6 +12,8 @@ except ImportError:
 
 import random
 
+import botText
+from botText import german_stem
 from botActions import BotAction
 
 
@@ -390,6 +393,109 @@ class BotIntent:
             print(f"Input '{input_text}' did not match any item (score {score}).")
         return None
 
+    def _match_input_to_items_structured(self, input_text, items):
+        """
+        Staged entity matching per design D2 (german-plural-entity-resolution).
+
+        Stage 1 - exact stem containment: stem both the input tokens
+        (botText.normalize) and the item names (full name and each
+        word), and collect items whose name stem equals an input
+        token stem, or whose word stems start/end with it (German
+        compound handling, e.g. 'frosch' in 'Teichfrosch').
+
+        Stage 2 - fuzzy fallback (only when stage 1 found nothing):
+        the existing WRatio match, but per input token against the
+        item names instead of the whole sentence, accepted at
+        self.matchThreshold.
+
+        Returns a structured result dict or None:
+          {"kind": "single", "name": str}
+          {"kind": "group", "names": [str, ...]}  # ordered best-first
+        """
+        if self.DEBUG:
+            print(f"_match_input_to_items_structured: Matching '{input_text}' against {len(items)} items (staged)")
+
+        input_stems = [s for s in botText.normalize(input_text) if len(s) >= 3]
+        if not input_stems:
+            return None
+
+        # Precompute stems for every item: full name, each word's
+        # stem, and each raw lowercase word (containment candidates).
+        item_stems = []  # list of (item, full_stem, word_stems, raw_words)
+        for item in items:
+            name = str(item)
+            full_stem = german_stem(name)
+            words = [w.lower() for w in re.split(r"[^A-Za-zÄÖÜäöüß]+", name) if w]
+            word_stems = [german_stem(w) for w in words]
+            item_stems.append((name, full_stem, word_stems, words))
+
+        # Stage 1: exact stem relation, ranked by match quality.
+        # Loose prefix/suffix containment (rank 2) demands at least a
+        # 3-char token stem that is not a function word, so short
+        # words ("wie", "das", "gibt") cannot spuriously match item
+        # stems ("Wiesen-...") while genuine short terms ("aue",
+        # "auen") still match. Containment runs against both the
+        # word stems and the raw lowercase words - e.g. "aue"
+        # matches "Rheinaue" only on the raw form, because the stem
+        # strips the trailing "e" ("rheinau").
+        ranked = []  # (rank, name)
+        for token in input_stems:
+            loose_ok = len(token) >= 3 and token not in botText.FUNCTION_WORD_STEMS
+            for name, full_stem, word_stems, raw_words in item_stems:
+                if full_stem == token:
+                    ranked.append((0, name))
+                elif token in word_stems:
+                    ranked.append((1, name))
+                elif loose_ok and any(
+                        ws.startswith(token) or ws.endswith(token)
+                        for ws in list(word_stems) + list(raw_words)
+                        if ws != token):
+                    ranked.append((2, name))
+
+        if ranked:
+            # Deduplicate, order by best rank, stable within a rank.
+            seen = set()
+            ordered = []
+            for rank, name in sorted(ranked, key=lambda r: r[0]):
+                if name not in seen:
+                    seen.add(name)
+                    ordered.append(name)
+            if self.DEBUG:
+                print(f"Stage 1 (stem containment) matched: {ordered}")
+            if len(ordered) == 1:
+                return {"kind": "single", "name": ordered[0]}
+            return {"kind": "group", "names": ordered}
+
+        # Stage 2: per-token fuzzy fallback against item names.
+        # Short token stems (function words like "wie", "wett") get
+        # inflated WRatio scores against long names and would match
+        # spuriously, so the fallback only considers stems of 5+
+        # characters - long enough for real typo-style queries.
+        best = None  # (score, name)
+        for token in botText.normalize(input_text):
+            if len(token) < 5:
+                continue
+            match = process.extractOne(
+                token, [str(i).lower() for i in items],
+                scorer=fuzz.WRatio, processor=matchProcessor,
+            )
+            if not match:
+                continue
+            _, score, idx = match[0], match[1], match[2] if len(match) > 2 else None
+            if idx is None:
+                continue
+            if best is None or score > best[0]:
+                best = (score, str(items[idx]))
+
+        if best and best[0] >= self.matchThreshold:
+            if self.DEBUG:
+                print(f"Stage 2 (fuzzy fallback) matched: {best[1]} (score {best[0]})")
+            return {"kind": "single", "name": best[1]}
+
+        if self.DEBUG:
+            print("No staged match found.")
+        return None
+
     def _match_input_to_options(self, input_text, options):
         """
         Match user input against a list of option dicts.
@@ -633,10 +739,35 @@ class BotIntent:
         if items is None:
             return self._make_error_response("no_items_file", context, intent, lang)
 
-        # Match input to items
-        matched_value = self._match_input_to_items(input_text, items)
-        if matched_value is None:
+        # Match input to items (staged matcher, design D2). A group
+        # match offers the members as options instead of filling the
+        # requirement arbitrarily; a single match fills it directly.
+        match_result = self._match_input_to_items_structured(input_text, items)
+        if match_result is None:
+            if self.DEBUG:
+                print("No staged match found for input.")
             return self._make_error_response("Nichts gefunden... hier könnte ein Vorschlag kommen", context, intent, lang)
+
+        if match_result["kind"] == "group" and missing_req == "entity":
+            names = match_result["names"]
+            if self.DEBUG:
+                print(f"Group match for '{missing_req}', offering options: {names}")
+            ctx = dict(context)
+            ctx["options"] = [{"title": name} for name in names]
+            ctx["intent"] = intent.get("intent")
+            output = {"text": BotIntent.getMsg("select_options", lang)}
+            if intent.get("link") is not None:
+                output["link"] = intent.get("link")
+            return {"output": output, "context": ctx}
+
+        # Single match (or group collapsed to its best member for
+        # non-entity requirements) fills the requirement as today.
+        if match_result["kind"] == "group":
+            matched_value = match_result["names"][0]
+            if self.DEBUG:
+                print(f"Group match for non-entity requirement '{missing_req}', using best member: {matched_value}")
+        else:
+            matched_value = match_result["name"]
 
         # Update context and finalize
         context[missing_req] = matched_value
