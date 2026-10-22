@@ -544,12 +544,14 @@ ENTITY_SAMPLES: List[Dict[str, Any]] = [
 def scenario_frosch(env: ServiceEnv) -> bool:
     """The archived german-plural-entity-resolution acceptance flow:
     "gibt es da frösche" offers exactly the five frosch species with no
-    entity filled; replying "teichfrosch" completes the flow."""
+    entity filled; replying "teichfrosch" completes the flow. The
+    option-prompt response must carry the plaintext options field next
+    to the sealed token (expose-response-options)."""
     client = BotApiClient(url=env.url, timeout=env.timeout)
     state = ScenarioState(env=env)
     print("=== Frosch plural scenario ===")
 
-    status, _ = state.turn(client, "gibt es da frösche")
+    status, response = state.turn(client, "gibt es da frösche")
     if status != 200:
         return _report("frosch", False, f"turn 1 failed: {status}")
     ctx = state.context()
@@ -561,6 +563,14 @@ def scenario_frosch(env: ServiceEnv) -> bool:
                      f"expected options {FROSCH_SPECIES}, got {opts}")
     if "entity" in ctx and ctx.get("entity"):
         ok = _report("frosch", False, f"entity filled on turn 1: {ctx.get('entity')!r}")
+    # plaintext options field next to the sealed token
+    wire_opts = (response or {}).get("options")
+    wire_titles = [o.get("title") if isinstance(o, dict) else o for o in (wire_opts or [])]
+    if sorted(map(str.lower, wire_titles)) != sorted(map(str.lower, FROSCH_SPECIES)):
+        ok = _report("frosch", False,
+                     f"plaintext options missing/incorrect on the wire: {wire_titles}")
+    else:
+        print("    plaintext options on the wire: OK")
 
     status, _ = state.turn(client, "teichfrosch")
     if status != 200:

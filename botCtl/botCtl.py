@@ -539,15 +539,19 @@ def route_handler():
                 llm_used=llmUsed
             )
 
+            # User-facing options travel in plaintext next to the
+            # sealed token (expose-response-options); the token keeps
+            # them sealed as well.
+            response_payload = {
+                "state": seal_state(ctx, session),
+                "message": output,
+                "session": session,
+                "sequence": sequence,
+            }
+            if ctx.get("options"):
+                response_payload["options"] = ctx["options"]
             return (
-                jsonify(
-                    {
-                        "state": seal_state(ctx, session),
-                        "message": output,
-                        "session": session,
-                        "sequence": sequence,
-                    }
-                ),
+                jsonify(response_payload),
                 200,
             )
         else:
@@ -626,8 +630,20 @@ def route_handler():
 
         # 200 OK – sealed state token + final message
         # FIXME copy output into content to satsify auenlaend app
+        # User-facing options travel in plaintext next to the sealed
+        # token (expose-response-options); the token keeps them sealed
+        # as well.
+        response_payload = {
+            "state": seal_state(ctx, session),
+            "message": message,
+            "session": session,
+            "sequence": sequence + 1,
+            lang: lang,
+        }
+        if ctx.get("options"):
+            response_payload["options"] = ctx["options"]
         return (
-            jsonify({"state": seal_state(ctx, session),"message":message, "session": session, "sequence":sequence + 1, lang:lang}),
+            jsonify(response_payload),
             200,
         )
 
