@@ -507,6 +507,17 @@ class BotIntent:
                     ordered.append(name)
                     if min_rank is None or rank < min_rank:
                         min_rank = rank
+            # Group cap (limit-group-options-to-five): offer at most five
+            # species. When the ranks distinguish the members, keep the
+            # best-ranked five in rank order; when all share one rank
+            # (no ranking signal), pick five at random so repeated asks
+            # can surface different members. The weak flag is computed
+            # from min_rank BEFORE the cap.
+            if len(ordered) > 5:
+                if min_rank != max(r for r, _ in ranked):
+                    ordered = ordered[:5]
+                else:
+                    ordered = random.sample(ordered, 5)
             if self.DEBUG:
                 print(f"Stage 1 (stem containment) matched: {ordered}")
             weak = (min_rank == 2)

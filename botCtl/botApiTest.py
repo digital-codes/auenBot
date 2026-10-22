@@ -535,6 +535,9 @@ ENTITY_SAMPLES: List[Dict[str, Any]] = [
     {"name": "oov luchs no species", "input": "luchs",
      "no_entity": True,
      "text_not_contains": ["otfuchs"]},
+    # --- group cap: oversized loose groups offer at most 5 options ---
+    {"name": "group cap wie-gross", "input": "wie groß ist das reh",
+     "options_present": True, "max_options": 5, "no_entity": True},
     # --- no-match: intent options offered, but never a species ---
     {"name": "no-match gibberish", "input": "xzqgrumpf blorps",
      "options_present": True, "no_species_options": True, "no_entity": True},
@@ -648,6 +651,8 @@ def scenario_entity_samples(env: ServiceEnv) -> bool:
                 ok, detail = False, f"expected options {sample['options']}, got {opts}"
         if sample.get("options_present") and not opts:
             ok, detail = False, "expected options to be offered, got none"
+        if sample.get("max_options") and len(opts) > sample["max_options"]:
+            ok, detail = False, f"expected at most {sample['max_options']} options, got {len(opts)}: {opts}"
         if sample.get("no_species_options") and any(str(o).lower() in species for o in opts):
             ok, detail = False, f"species offered as options: {opts}"
         if sample.get("no_entity") and ctx.get("entity"):
