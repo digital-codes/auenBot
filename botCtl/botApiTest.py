@@ -690,7 +690,10 @@ def scenario_breakout(env: ServiceEnv) -> bool:
         print(f"    miss {i}: count={ctx.get('no_match_count')} "
               f"intent={'intent' in ctx} focus={'focus' in ctx}")
         if i < 3:
-            ok &= status == 200 and "intent" in ctx
+            # the miss count increments each turn (the pending-intent
+            # marker is no longer expected mid-streak: completed flows
+            # clear it, see reset-sticky-intent-after-completion)
+            ok &= status == 200 and ctx.get("no_match_count") == i
         else:
             t = _format_text(state.last_message.get("text")).lower()
             ok &= (status == 200 and ctx.get("no_match_count") == 0
@@ -746,6 +749,87 @@ def scenario_followup(env: ServiceEnv) -> bool:
              and ("Ricke" in t or "kg" in t or "Kitz" in t)
     if ok:
         ok = _report("followup", True)
+    print("=== end ===")
+    return ok
+
+
+def scenario_post_completion(env: ServiceEnv) -> bool:
+    """reset-sticky-intent-after-completion: turns after a completed
+    flow - or while a completion menu is pending - must reach the intent
+    the input belongs to. The stale option menu must never reappear for
+    unrelated input and no internal error key may leak as chat text."""
+    client = BotApiClient(url=env.url, timeout=env.timeout)
+    state = ScenarioState(env=env)
+    print("=== Post-completion routing scenario ===")
+    ok = True
+
+    # --- 4.1: complete a messdaten query, then ask about the bus ---
+    status, _ = state.turn(client, "messdaten")
+    opts = [o.get("title") for o in state.context().get("options", [])]
+    if status != 200 or not opts:
+        return _report("post_completion", False, f"messdaten menu not offered: {opts}")
+    status, _ = state.turn(client, "O3")
+    t = _format_text(state.last_message.get("text"))
+    ok &= status == 200 and ("Ozon" in t or "µg" in t)
+    ctx = state.context()
+    ok &= "intent" not in ctx  # completion popped the pending marker
+    print(f"    O3 answered (marker popped: {'intent' not in ctx})")
+    status, _ = state.turn(client, "wann fährt der bus")
+    t = _format_text(state.last_message.get("text"))
+    opts = [o.get("title") for o in state.context().get("options", [])]
+    print(f"    bus question: opts={opts} text[:80]={t[:80]!r}")
+    # the messdaten menu must not come back, no error keys
+    ok &= status == 200 and not {"LQI", "O3", "NO2"} & set(opts or [])
+    ok &= "no_match" not in t and "Fehler:" not in t
+    if opts:  # decoder offered intent options: pick anreise if present
+        if "anreise" in opts:
+            status, _ = state.turn(client, "anreise")
+            ctx = state.context()
+            ok &= status == 200 and ctx.get("intent") == "anreise"
+            print(f"    picked 'anreise' -> intent={ctx.get('intent')}")
+        else:
+            # neutral non-answer offered; restart clean for the next part
+            state.turn(client, "halt")
+
+    # --- 4.2: 'anreise' after a completed tp question starts anreise ---
+    status, _ = state.turn(client, "was macht das reh")
+    ctx = state.context()
+    if status != 200 or ctx.get("focus", {}).get("entity") != "Reh":
+        return _report("post_completion", False,
+                       f"tp setup failed: focus={ctx.get('focus')}")
+    status, _ = state.turn(client, "anreise")
+    ctx = state.context()
+    opts = [o.get("title") for o in ctx.get("options", [])]
+    print(f"    'anreise' after tp answer: intent={ctx.get('intent')} opts={opts}")
+    ok &= status == 200 and ctx.get("intent") == "anreise" \
+        and {"ÖPNV", "Auto"} <= set(opts or [])
+    state.turn(client, "halt")
+
+    # --- 4.3: unrelated question while the messdaten menu is pending ---
+    status, _ = state.turn(client, "messdaten")
+    if status != 200 or not state.context().get("options"):
+        return _report("post_completion", False, "messdaten menu not offered")
+    status, _ = state.turn(client, "gibt es was zu essen")
+    t = _format_text(state.last_message.get("text"))
+    print(f"    essen while menu pending: text[:80]={t[:80]!r}")
+    ok &= status == 200 and ("Essen" in t or "essen" in t or "Naturfreundehaus" in t) \
+        and "no_match" not in t and "Fehler:" not in t
+
+    # --- 4.4: gibberish x3 while the menu is pending still breaks out ---
+    status, _ = state.turn(client, "messdaten")
+    if status != 200 or not state.context().get("options"):
+        return _report("post_completion", False, "messdaten menu not offered")
+    for i in range(1, 4):
+        status, _ = state.turn(client, "xzqgrumpf blorps")
+        ctx = state.context()
+        print(f"    gibberish {i}: count={ctx.get('no_match_count')} "
+              f"intent={'intent' in ctx} options={'options' in ctx}")
+    t = _format_text(state.last_message.get("text")).lower()
+    ok &= status == 200 and "von vorne" in t and "intent" not in ctx \
+        and not ctx.get("options")
+
+    if ok:
+        ok = _report("post_completion", True)
     print("=== end ===")
     return ok
 
@@ -827,13 +911,15 @@ SCENARIOS: Dict[str, Tuple[Any, bool]] = {
     "entities": (scenario_entity_samples, False),
     "breakout": (scenario_breakout, False),
     "followup": (scenario_followup, False),
+    "post_completion": (scenario_post_completion, False),
     "tampered": (scenario_tampered_token, False),
     "foreign": (scenario_foreign_session, False),
     "db_crosscheck": (scenario_db_crosscheck, False),
     "restart_resume": (scenario_restart_same_secret, True),
     "restart_no_secret": (scenario_restart_missing_secret, True),
 }
-ALL_ORDER = ["reh", "frosch", "entities", "breakout", "followup", "tampered",
+ALL_ORDER = ["reh", "frosch", "entities", "breakout", "followup",
+             "post_completion", "tampered",
              "foreign", "db_crosscheck", "restart_resume", "restart_no_secret"]
 
 

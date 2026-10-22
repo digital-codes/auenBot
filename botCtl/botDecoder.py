@@ -283,9 +283,10 @@ class BotDecoder:
         return None
 
 
-    def intentOptions(self, input_text: str, options: list) -> str:
+    def intentOptions(self, input_text: str, options: list) -> tuple[bool, str | None]:
         """Check if the input_text matches one of the options.
-        Returns the index of the matched option, or None if no match.
+        Returns (True, selected-title) on a match, or (False, None) if
+        no option matched - the caller decides the fallback.
         """
         if self.DEBUG: print("Checking user input for intent options:", input_text, options)
         selected_idx = self.__checkOptions(input_text, [opt["title"] for opt in options])
@@ -301,12 +302,9 @@ class BotDecoder:
                 if self.DEBUG: print("Mapped selected option to intent:", user_intent)
                 return True, user_intent
 
-        # not found. clear options and continue
-        if self.DEBUG: print("No option matched user input yet, start over")
-        fallback = self.intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")
-        target_intent = fallback["intent"]
-        if self.DEBUG: print("Using fallback")
-        return False, target_intent        
+        # not found. the caller decides what to do with the input
+        if self.DEBUG: print("No option matched user input yet")
+        return False, None
 
 
 

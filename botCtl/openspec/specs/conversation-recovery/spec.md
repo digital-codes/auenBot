@@ -12,13 +12,14 @@ natural follow-up questions reuse the entity of the previous answer.
 ### Requirement: Consecutive no-match turns are counted per conversation
 
 The system SHALL count consecutive no-match outcomes in the
-conversation context. A no-match outcome is a turn where the entity
-requirement cannot be resolved (staged matching and arbiter failed) or
-a reply fails to match offered options. A focus-filled follow-up turn
-SHALL count as a miss when it cannot answer (the requested feature has
-no data for the focused entity). A turn that answers with content —
-from a direct match or from a focus-filled follow-up — SHALL reset the
-count to zero.
+conversation context. A no-match outcome is a turn that ends without an
+answer: the entity requirement cannot be resolved (staged matching and
+arbiter failed), a reply fails to match offered options and fallback
+re-decoding finds no other intent, or a focus-filled follow-up cannot
+answer (the requested feature has no data for the focused entity). A
+turn that answers with content — from a direct match, from a
+focus-filled follow-up, or from an intent that took over after fallback
+re-decoding — SHALL reset the count to zero.
 
 #### Scenario: Misses accumulate across turns
 
@@ -30,9 +31,16 @@ count to zero.
 #### Scenario: A reply that never matches options counts as a miss
 
 - **WHEN** entity options were offered in a previous turn and the
-  user's reply matches none of them
+  user's reply matches none of them and no other intent can be decoded
 - **THEN** that turn increments the miss count like any other no-match
   outcome
+
+#### Scenario: A turn rescued by re-decoding is not a miss
+
+- **WHEN** options are pending and the user's reply matches none of
+  them, but the input decodes to another intent that answers
+- **THEN** the turn does not increment the miss count (the count resets
+  as for any answered turn), and the pending flow is abandoned
 
 #### Scenario: Unhelpful focus-filled turns count, helpful ones reset
 

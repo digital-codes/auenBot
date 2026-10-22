@@ -51,7 +51,7 @@ INTENT_MESSAGES = {
         "options_file_not_found": "Fehler: Optionsdatei für Completion nicht gefunden.",
         "no_input_completion": "Fehler: Kein Eingabewert für Completion.",
         "no_items_file": "Fehler: Keine Items-Datei für Completion-Intent vorhanden.",
-        "no_match_completion": "Fehler: Eingabe hat kein Item für Completion gefunden.",
+        "no_match_completion": "Das habe ich leider nicht verstanden. Kannst du es anders formulieren?",
         "no_input_options": "Fehler: Kontext hat Optionen, aber keine Eingabe angegeben.",
         "invalid_key": "Fehler: Ungültiger Schlüssel.",
         "select_options": "Bitte wählen Sie eine der folgenden Optionen:",
@@ -65,7 +65,7 @@ INTENT_MESSAGES = {
         "options_file_not_found": "Error: Options file not found for completion.",
         "no_input_completion": "Error: No input for completion.",
         "no_items_file": "Error: No items file available for completion intent.",
-        "no_match_completion": "Error: Input did not match any item for completion.",
+        "no_match_completion": "Sorry, I didn't understand that. Could you rephrase it?",
         "no_input_options": "Error: Context has options but no input provided.",
         "invalid_key": "Error: Invalid key.",
         "select_options": "Please select one of the following options:",
@@ -79,7 +79,7 @@ INTENT_MESSAGES = {
         "options_file_not_found": "Erreur : Fichier d'options introuvable pour la complétion.",
         "no_input_completion": "Erreur : Aucune entrée pour la complétion.",
         "no_items_file": "Erreur : Aucun fichier d'éléments disponible pour l'intention de complétion.",
-        "no_match_completion": "Erreur : L'entrée n'a fait correspondre aucun élément pour la complétion.",
+        "no_match_completion": "Désolé, je n'ai pas compris. Peux-tu le reformuler ?",
         "no_input_options": "Erreur : Le contexte a des options mais aucune entrée fournie.",
         "invalid_key": "Erreur : Clé invalide.",
         "select_options": "Veuillez sélectionner l'une des options suivantes :",
@@ -847,11 +847,21 @@ class BotIntent:
                 print(f"Routing to matched intent '{target_name}' -> {matched_intent}")
             
             output = {"text": f"{BotIntent.getMsg('completed', lang)} Route to intent: {matched_intent.get('intent') if matched_intent else target_name}"}
-            # overwrite intent with target
+            # overwrite intent with target (D1: routed flow starts fresh;
+            # its own completion pops the marker again)
             ctx = { "intent": target_name, "last_input": input_text }
             if self.DEBUG:
                 print(f"Executing routed intent '{target_name}'")
-            return self.execute(intent_name=target_name, context=ctx, input=input_text, lang=lang)
+            routed = self.execute(intent_name=target_name, context=ctx, input=input_text, lang=lang)
+            # The routed flow answered in this same call (e.g. a default
+            # handler): its marker must not survive either, or the sticky
+            # routing starts over from the routed intent. A still-pending
+            # routed flow keeps its marker (it is waiting for input).
+            if routed.get("completed"):
+                routed_ctx = dict(routed.get("context") or {})
+                routed_ctx.pop("intent", None)
+                routed["context"] = routed_ctx
+            return routed
 
         else:
             # Process action or use default completion message
@@ -881,6 +891,15 @@ class BotIntent:
         # Remove requirements from context
         for req in requirements:
             ctx.pop(req, None)
+
+        # Pending-completion marker (reset-sticky-intent-after-completion,
+        # D1): `intent` is only set while a flow waits for user input.
+        # The flow ends here, so the marker must go, or the router keeps
+        # forcing every later turn into this intent. The feature-fallback
+        # early return above is deliberately NOT affected: that flow is
+        # still waiting for the feature pick. last_intent / last_input /
+        # focus are the durable memory fields and stay.
+        ctx.pop("intent", None)
 
         return {"output": output, "context": ctx,"completed": True}
 
@@ -912,6 +931,10 @@ class BotIntent:
 
         # insert input as last_input in context
         # context["last_input"] = input
+        # Pending-completion marker (D1): the default handler answers
+        # immediately, so an intent marker the router attached must not
+        # survive this turn.
+        context.pop("intent", None)
         return {"output": output, "context": context,"completed": True}
 
     def __completeHandler(self, intent, input=None, context=None, lang="de"):
@@ -970,6 +993,8 @@ class BotIntent:
 
             ctx = dict(context)
             ctx["options"] = options
+            # Pending-completion marker (D1): set only while this flow
+            # waits for user input; popped again on completion.
             ctx["intent"] = intent.get("intent")
             
             output = {"text": BotIntent.getMsg("select_options", lang)}
@@ -1038,7 +1063,9 @@ class BotIntent:
                     focus_filled = True
                     match_result = {"kind": "single", "name": focus_entity}
         if match_result is None:
-            result = self._make_error_response("Nichts gefunden... hier könnte ein Vorschlag kommen", context, intent, lang)
+            # User-appropriate no-match text (D4); the internal marker
+            # "no_match_completion" stays on the result for history.
+            result = self._make_error_response("no_match_completion", context, intent, lang)
             result["no_match"] = True
             return result
 

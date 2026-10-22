@@ -341,6 +341,10 @@ def _text_to_string(text: Any) -> Any:
 
 MORE_RESULTS_NOTE = "\nEs gibt weitere Ergebnisse ..."
 
+# Breakout invite (add-no-match-breakout-and-focus-followups); shared by
+# both breakout sites (execution path and options-prompt streak path).
+BREAKOUT_TEXT = "Ich hab dich leider nicht verstanden. Lass uns von vorne beginnen - stell deine Frage einfach neu!"
+
 
 def normalize_tx_message(message: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize an intent execution output in place.
@@ -488,15 +492,106 @@ def route_handler():
     user_feature = ctx.get("feature", None)
     if DEBUG: print("User feature:", user_feature)
 
+    # Fresh intent decoding for input not consumed by option picks or a
+    # pending flow (reset-sticky-intent-after-completion, D2). Returns
+    # (intent_name_or_None, options_or_None, llm_used); the callers own
+    # all context mutation, history storage and responses.
+    def _decode_new_intent():
+        detection, llmUsed = decoder.detectIntent(user_input)
+        if isinstance(detection, str):
+            return detection, None, llmUsed
+        if isinstance(detection, list):
+            return None, detection, llmUsed
+        fallback = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")
+        return fallback["intent"], None, llmUsed
+
+    # Shared tail of both option-prompt sites (fresh decode and no-match
+    # fallback): offer the decoded intent options and end the turn.
+    def _offer_intent_options(intent_options, llmUsed):
+        nonlocal sequence, ctx
+        # Offering intent options is not an answer (conversation-
+        # recovery: only turns that answer with content reset the
+        # streak). Mid-conversation (a focus or an active streak
+        # exists), an unsure options prompt counts as a miss, so
+        # repeated gibberish still reaches the breakout. At conversation
+        # start the prompt stays free - it is a legitimate first reply.
+        misses = int(ctx.get("no_match_count") or 0)
+        in_conversation = bool(ctx.get("focus") or ctx.get("last_intent"))
+        if misses > 0 or in_conversation:
+            misses += 1
+            if DEBUG: print(f"Options prompt during miss streak: {misses}/{intents.getMaxNoMatch()}")
+            if misses >= intents.getMaxNoMatch():
+                ctx = {}
+                # keep the execution-path breakout convention: the
+                # cleared context still carries the reset counter
+                ctx["no_match_count"] = 0
+                output = {"text": BREAKOUT_TEXT}
+                misses = 0
+                sequence = sequence + 1
+                store_history(
+                    status="ok",
+                    message=output,
+                    type="TX",
+                    session=session,
+                    sequence=sequence,
+                    lang=lang,
+                    ctx=ctx,
+                    llm_used=llmUsed
+                )
+                return (
+                    jsonify({
+                        "state": seal_state(ctx, session),
+                        "message": output,
+                        "session": session,
+                        "sequence": sequence,
+                    }),
+                    200,
+                )
+            ctx["no_match_count"] = misses
+        ctx["options"] = intent_options        # make sure we clear intent
+        ctx.pop("intent", None)
+        output = {
+            "text": "Bitte wähle eine der folgenden Optionen aus:"
+            }
+        sequence = sequence + 1
+        store_history(
+            status="ok",
+            message=output,
+            type="TX",
+            session=session,
+            sequence=sequence,
+            lang=lang,
+            ctx=ctx,
+            llm_used=llmUsed
+        )
+
+        # User-facing options travel in plaintext next to the
+        # sealed token (expose-response-options); the token keeps
+        # them sealed as well.
+        response_payload = {
+            "state": seal_state(ctx, session),
+            "message": output,
+            "session": session,
+            "sequence": sequence,
+        }
+        if ctx.get("options"):
+            response_payload["options"] = ctx["options"]
+        return (
+            jsonify(response_payload),
+            200,
+        )
+
     # ----------------------------------------------
     # Initial decoding 
     # if message text is empty, abort with 400, invalid message text
     # if message text.lower() is in ["nein, non, non, stop, halt,"restart","reset"] set intent to "decline/"63b6a1f6d9d1941218c5c7c7"
-    # if intent is none and options are present, check if message text matches one of the options. if yes, set intent to that option title
-    # if intent is none and no options, use vector search to find best intent
-    # if intent is set, execute intent action
+    # if options are present, check if message text matches one of the options. if yes, set intent to that option title
+    # otherwise, if no pending intent, use vector search to find best intent
+    # if a pending intent is set, give it the turn (no-match falls back
+    # to re-decoding after execution, see below)
     # ----------------------------------------------
     target_intent = None
+    fallback_turn = False
     if user_input == "" or user_input is None:
         return jsonify(error="Invalid message text"), 400 
     elif user_input.lower() in ["nein","no","non","stop","halt","restart","reset"]:
@@ -504,68 +599,43 @@ def route_handler():
         decline_intent = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7c7")
         target_intent = decline_intent["intent"]
         if DEBUG: print("User declined/reset, setting intent to:", target_intent)
-    elif (user_intent is None or user_intent == "") and len(options) > 0:
+    elif len(options) > 0 and (user_intent is None or user_intent == ""):
+        # Option resolution applies to the decoder's intent options
+        # (titles are intent names, no pending completion intent).
+        # A pending completion keeps the turn and matches option picks
+        # itself in the handler; unrelated input is handled by the
+        # no-match fallback after execution (D2).
         if DEBUG: print("Checking user input against options:", user_input, options)
-        resolved, target_intent = decoder.intentOptions(user_input, options)
-        if DEBUG: print("Option resolution returned:", resolved, target_intent)
-        # remove options from ctx, if any
+        resolved, option_intent = decoder.intentOptions(user_input, options)
+        if DEBUG: print("Option resolution returned:", resolved, option_intent)
+        # options are consumed either way; unresolved input falls
+        # through to a fresh decode below.
         ctx.pop("options",None)
-        if DEBUG: print("Mapped user input to intent from options:", target_intent)
-    elif (user_intent is None or user_intent == "") and len(options) == 0:
+        if resolved:
+            target_intent = option_intent
+            if DEBUG: print("Mapped user input to intent from options:", target_intent)
+
+    if target_intent is None and (user_intent is None or user_intent == ""):
         if DEBUG: print("No intent and no options, checking for continue:", user_input)
-        # remove options from ctx, if any
-        ctx.pop("options",None)
-        detection, llmUsed = decoder.detectIntent(user_input)  # will be determined below
-        if isinstance(detection, str):
-            target_intent = detection
-            if DEBUG: print("Detected intent from input:", target_intent)
-        elif isinstance(detection, list):
-            if DEBUG: print("Need user to select intent from options:", detection)
-            ctx["options"] = detection
-            # make sure we clear intent
-            ctx.pop("intent",None)
-            output = {
-                "text": "Bitte wähle eine der folgenden Optionen aus:"
-                }
-            sequence = sequence + 1
-            store_history(
-                status="ok",
-                message=output,
-                type="TX",
-                session=session,
-                sequence=sequence,
-                lang=lang,
-                ctx=ctx,
-                llm_used=llmUsed
-            )
-
-            # User-facing options travel in plaintext next to the
-            # sealed token (expose-response-options); the token keeps
-            # them sealed as well.
-            response_payload = {
-                "state": seal_state(ctx, session),
-                "message": output,
-                "session": session,
-                "sequence": sequence,
-            }
-            if ctx.get("options"):
-                response_payload["options"] = ctx["options"]
-            return (
-                jsonify(response_payload),
-                200,
-            )
-        else:
-            if DEBUG: print("No intent detected, using fallback")
-            fallback = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")
-            target_intent = fallback["intent"]
-
-    elif user_intent is not None and user_intent != "":
-        if DEBUG: print("User intent already set, checking for continue:", user_input)
+        new_intent, new_options, llmUsed = _decode_new_intent()
+        if new_options is not None:
+            if DEBUG: print("Need user to select intent from options:", new_options)
+            return _offer_intent_options(new_options, llmUsed)
+        target_intent = new_intent
+        # A turn answered by the fallback ("not sure") utterance is not
+        # an answer (conversation-recovery): it counts as a miss so
+        # repeated gibberish reaches the breakout.
+        fallback_turn = (
+            new_intent
+            == intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")["intent"]
+        )
+        if DEBUG: print("Detected intent from input:", target_intent)
+    elif target_intent is None:
+        # (D2) Pending intent keeps the turn: it may fill its remaining
+        # requirements from the input text. If it cannot use the input,
+        # the no-match fallback after execution re-decodes it.
+        if DEBUG: print("Pending intent keeps the turn:", user_intent)
         target_intent = user_intent
-    else:
-        if DEBUG: print("Unhandled case in intent decoding.")
-        return jsonify(error="Decoding failed"), 500
-
 
     # proceed with target_intent
     if DEBUG: print("Proceed with target intent from request:", target_intent)
@@ -580,14 +650,63 @@ def route_handler():
         if DEBUG: print("intent execution returned:",result)
 
         if result.get("error", None) is not None:
-            # some error occured
-            message = {"text": result.get("error")}
+            # some error occured: keep the localized user-facing output
+            # text (reset-sticky-intent-after-completion, D4) and only
+            # mark the turn as errored for history; the internal error
+            # key stays on the result object for debugging.
+            message = result.get("output", {}) or {"text": result.get("error")}
             status="error"
         else:
             message = result.get("output", {})
             status="ok"
     
         ctx = result.get("context", {})
+
+        # A fallback-answered turn is a miss (see fresh decode above).
+        if fallback_turn and not result.get("no_match"):
+            result["no_match"] = True
+
+        # No-match fallback (reset-sticky-intent-after-completion,
+        # D2/D3): a pending flow that could not use the input gets one
+        # re-decode attempt. A newly decoded intent takes over the turn
+        # and answers; only when re-decoding finds nothing new does the
+        # no-match reply stand and the turn count as a miss
+        # (intent-lifecycle spec, conversation-recovery spec).
+        if result.get("no_match") and user_intent and target_intent == user_intent:
+            fallback_intent = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")["intent"]
+            new_intent, new_options, fb_llm = _decode_new_intent()
+            if DEBUG: print("No-match fallback decode returned:", new_intent, new_options)
+            if new_intent and new_intent not in (fallback_intent, target_intent):
+                # another intent takes over the turn (e.g. "gibt es was
+                # zu essen" while the messdaten menu is pending)
+                result = intents.execute(new_intent,input=user_input,context=ctx,lang=lang)
+                target_intent = new_intent
+                if DEBUG: print("No-match takeover by intent:", target_intent, result)
+                if result.get("error", None) is not None:
+                    # D4: user-facing text, errored turn for history
+                    message = result.get("output", {}) or {"text": result.get("error")}
+                    status="error"
+                else:
+                    message = result.get("output", {})
+                    status="ok"
+                ctx = result.get("context", {})
+            else:
+                # Re-decoding found nothing decisive (fallback intent or
+                # only unsure option candidates): keep the friendly
+                # fallback reply and count the turn as a miss (spec
+                # scenario "Gibberish while options are pending stays a
+                # miss"). A takeover intent is the only rescue.
+                result = intents.execute(fallback_intent,input=user_input,context=ctx,lang=lang)
+                result["no_match"] = True
+                if result.get("error", None) is not None:
+                    # D4: user-facing text, errored turn for history
+                    message = result.get("output", {}) or {"text": result.get("error")}
+                    status="error"
+                else:
+                    message = result.get("output", {})
+                    status="ok"
+                ctx = result.get("context", {})
+                target_intent = fallback_intent
 
         # No-match breakout (add-no-match-breakout-and-focus-followups,
         # design D1/D2): count consecutive unresolved turns centrally so
@@ -601,7 +720,7 @@ def route_handler():
             if DEBUG: print(f"No-match turn {misses}/{intents.getMaxNoMatch()}")
             if misses >= intents.getMaxNoMatch():
                 ctx = {}
-                message = {"text": "Ich hab dich leider nicht verstanden. Lass uns von vorne beginnen - stell deine Frage einfach neu!"}
+                message = {"text": BREAKOUT_TEXT}
                 status = "ok"
                 misses = 0
                 if DEBUG: print("Breakout: context cleared, conversation restarts.")
