@@ -121,6 +121,7 @@ class BotIntent:
         self.actionCtl = None
         self.actionNames = []
         self.matchThreshold = 75  # default fuzzy match threshold
+        self.maxNoMatch = 3      # breakout limit for consecutive no-match turns
         self.llm = None           # LLM client for the entity arbiter
         self._domain_lists_cache = None  # cached arbiter candidate lists
 
@@ -206,6 +207,14 @@ class BotIntent:
     def getThreshold(self):
         """Get the fuzzy match threshold (0-100)."""
         return self.matchThreshold
+
+    def setMaxNoMatch(self, n: int):
+        """Set the breakout limit for consecutive no-match turns."""
+        self.maxNoMatch = int(n)
+
+    def getMaxNoMatch(self) -> int:
+        """Get the breakout limit for consecutive no-match turns."""
+        return self.maxNoMatch
 
     def setActions(self, definition_file):
         """Set a BotActions instance to use for action processing."""
@@ -442,40 +451,68 @@ class BotIntent:
 
         # Stage 1: exact stem relation, ranked by match quality.
         # Loose prefix/suffix containment (rank 2) demands at least a
-        # 3-char token stem that is not a function word, so short
+        # 4-char token stem that is not a function word, so short
         # words ("wie", "das", "gibt") cannot spuriously match item
-        # stems ("Wiesen-...") while genuine short terms ("aue",
-        # "auen") still match. Containment runs against both the
-        # word stems and the raw lowercase words - e.g. "aue"
-        # matches "Rheinaue" only on the raw form, because the stem
-        # strips the trailing "e" ("rheinau").
+        # stems ("Wiesen-...") while genuine short terms still match.
+        # 4 chars (not 3): 3-char stems like "gro" (from "groß")
+        # prefix-match a dozen "Groß-*"/"Große-*" entities at once and
+        # hijack turns as bogus group matches (design D9 of
+        # add-no-match-breakout-and-focus-followups).
+        #
+        # Rank-1 word-stem hits distinguish the FINAL word of a
+        # multi-word name (the German noun head: "Feuerfalter" in
+        # "Großer Feuerfalter") from its adjective lead words: a hit
+        # on the noun head is strong (rank 1), a hit only on a lead
+        # adjective ("groß" in "Großer ...") is weak (rank 2) - the
+        # user asked about an aspect, not that species (design D9).
         ranked = []  # (rank, name)
         for token in input_stems:
-            loose_ok = len(token) >= 3 and token not in botText.FUNCTION_WORD_STEMS
+            loose_ok = len(token) >= 4 and token not in botText.FUNCTION_WORD_STEMS
             for name, full_stem, word_stems, raw_words in item_stems:
                 if full_stem == token:
                     ranked.append((0, name))
                 elif token in word_stems:
-                    ranked.append((1, name))
+                    if len(word_stems) == 1 or word_stems[-1] == token:
+                        ranked.append((1, name))
+                    else:
+                        ranked.append((2, name))
                 elif loose_ok and any(
                         ws.startswith(token) or ws.endswith(token)
                         for ws in list(word_stems) + list(raw_words)
                         if ws != token):
-                    ranked.append((2, name))
+                    # Distinguish the German compound noun head from lead
+                    # adjectives: a token that TERMINATES the final word
+                    # ("frosch" in "Teichfrosch") names the species - rank
+                    # 1. A token that only prefixes a lead word ("groß" in
+                    # "Großer Feuerfalter") is aspect noise - rank 2 (weak).
+                    head_words = ([raw_words[-1]] if raw_words else []) + \
+                                 ([word_stems[-1]] if word_stems else [])
+                    if any(ws.endswith(token) for ws in head_words if ws != token):
+                        ranked.append((1, name))
+                    else:
+                        ranked.append((2, name))
 
         if ranked:
             # Deduplicate, order by best rank, stable within a rank.
+            # A result resting ONLY on rank-2 loose hits is marked weak
+            # (design D9): such a "match" is prefix noise (e.g. "groß"
+            # vs. all Groß-* entities), not a real entity mention, and
+            # the caller may defer it to the focus follow-up.
             seen = set()
             ordered = []
+            min_rank = None
             for rank, name in sorted(ranked, key=lambda r: r[0]):
                 if name not in seen:
                     seen.add(name)
                     ordered.append(name)
+                    if min_rank is None or rank < min_rank:
+                        min_rank = rank
             if self.DEBUG:
                 print(f"Stage 1 (stem containment) matched: {ordered}")
+            weak = (min_rank == 2)
             if len(ordered) == 1:
-                return {"kind": "single", "name": ordered[0]}
-            return {"kind": "group", "names": ordered}
+                return {"kind": "single", "name": ordered[0], "weak": weak}
+            return {"kind": "group", "names": ordered, "weak": weak}
 
         # Stage 2: per-token fuzzy fallback against item names.
         # Short token stems (function words like "wie", "wett") get
@@ -577,6 +614,45 @@ class BotIntent:
             return None
         self._domain_lists_cache = lists
         return lists
+
+    def followup_check(self, user_text, focus_entity):
+        """LLM follow-up gate for the focus fill (conversation-recovery).
+
+        Asks once whether the user input is a follow-up question about
+        the focused entity. Returns True only on a clear yes; False on
+        a clear no, a malformed answer, or an LLM failure (the caller
+        then stays on the no-match path, so a broken LLM degrades to
+        the pre-follow-up behavior and the breakout stays reachable).
+        """
+        llm = self._get_llm()
+        if llm is None:
+            return False
+        try:
+            answer = llm.chat_json(
+                temperature=0.0,
+                system=(
+                    "Du bist ein Dialog-Klassifizierer für einen Natur-Chatbot. "
+                    "Ein Nutzer hat zuvor eine Frage über eine Entität gestellt "
+                    "und sie wurde beantwortet. Entscheide, ob die neue "
+                    "Nutzereingabe eine Follow-up-Frage ÜBER diese Entität ist "
+                    "(z.B. nach einem anderen Aspekt derselben Entität fragen, "
+                    "oder mit Pronomen darauf verweisen). Antworte NUR mit JSON: "
+                    '{"followup": true/false}. Eine Eingabe, die die Entität '
+                    "gar nicht meint oder unsinnig ist, ist KEIN Follow-up."
+                ),
+                user=(
+                    f"Vorherige Entität: '{focus_entity}'.\n"
+                    f"Neue Nutzereingabe: '{user_text}'"
+                ),
+                schema_hint='{"followup": bool}',
+            )
+        except Exception as e:
+            if self.DEBUG:
+                print("Follow-up check: LLM call failed:", e)
+            return False
+        if self.DEBUG:
+            print("Follow-up check: raw answer:", answer)
+        return isinstance(answer, dict) and answer.get("followup") is True
 
     def _validate_arbiter_answer(self, answer):
         """Strictly validate an arbiter answer against the domain lists.
@@ -738,6 +814,15 @@ class BotIntent:
         # insert input as last_input in context
         # context["last_input"] = input_text
 
+        # Conversation trace + focus (add-no-match-breakout-and-focus-
+        # followups, design D4/D5): every completed answer records what
+        # was answered and makes the resolved entity the conversation
+        # focus for follow-up questions.
+        ctx["last_input"] = input_text
+        ctx["last_intent"] = intent.get("intent")
+        if context.get("entity"):
+            ctx["focus"] = {"entity": context.get("entity"), "type": context.get("type")}
+
         # Check for target routing
         if "target" in requirements and "target" in context:
             target_name = context.get("target")
@@ -761,6 +846,26 @@ class BotIntent:
             # Process action or use default completion message
             action_result = self._process_action(intent, input_text, ctx, lang)
             output = action_result if action_result else {"text": BotIntent.getMsg("completed", lang)}
+
+            # Feature fallback (add-no-match-breakout-and-focus-followups,
+            # design D8): when the requested feature has no data for the
+            # resolved entity, inform the user and offer up to 3 of the
+            # entity's data-carrying features as options. The entity stays
+            # in the context, `feature` becomes the missing requirement, and
+            # the existing options flow completes the follow-up pick.
+            if action_result and action_result.get("no_feature_data"):
+                available = action_result.get("available_features") or []
+                if available:
+                    ctx.pop("feature", None)
+                    ctx["options"] = [{"title": f} for f in available]
+                    feat = context.get("feature") or "dieser Eigenschaft"
+                    output = {"text": (
+                        f"Zur Eigenschaft '{feat}' habe ich leider keine Informationen. "
+                        "Über einen dieser Aspekte kann ich dir etwas erzählen:"
+                    )}
+                    # marker for the miss counter (design D10): the turn
+                    # could not answer - if it was a focus fill, it counts.
+                    return {"output": output, "context": ctx, "no_feature_data": True}
 
         # Remove requirements from context
         for req in requirements:
@@ -888,38 +993,67 @@ class BotIntent:
         # requirement arbitrarily; a single match fills it directly.
         match_result = self._match_input_to_items_structured(input_text, items)
         arbiter_used = False
+        focus_filled = False
+        focus = context.get("focus") if isinstance(context.get("focus"), dict) else {}
+        focus_entity = focus.get("entity") if missing_req == "entity" else None
+
         if match_result is None:
             if self.DEBUG:
                 print("No staged match found for input.")
             # Entity arbiter (fix-entity-resolution-fallback): one LLM
-            # recovery attempt before giving up. Any failure (not found,
-            # invalid answer, LLM unavailable) falls through to the
-            # existing no-match error response.
+            # recovery attempt before giving up.
             recovered = self.arbiter_resolve_entity(input_text) if missing_req == "entity" else None
-            if recovered is None:
-                return self._make_error_response("Nichts gefunden... hier könnte ein Vorschlag kommen", context, intent, lang)
-            if self.DEBUG:
-                print(f"Arbiter recovered '{missing_req}': '{recovered}'")
-            arbiter_used = True
-            match_result = {"kind": "single", "name": recovered}
-            # The recovered entity usually belongs to a different domain
-            # than the decoded intent (e.g. an Auen name under a tp_*
-            # intent), so the intent-provided feature often has no data
-            # for it (e.g. 'generell'). 'definition' maps to the full
-            # key list (design D7), which every entity has content for.
-            context["feature"] = "definition"
+            if recovered is not None:
+                if self.DEBUG:
+                    print(f"Arbiter recovered '{missing_req}': '{recovered}'")
+                arbiter_used = True
+                match_result = {"kind": "single", "name": recovered}
+                # The recovered entity usually belongs to a different domain
+                # than the decoded intent (e.g. an Auen name under a tp_*
+                # intent), so the intent-provided feature often has no data
+                # for it (e.g. 'generell'). 'definition' maps to the full
+                # key list (design D7), which every entity has content for.
+                context["feature"] = "definition"
+            elif focus_entity:
+                # Focus-based follow-up (add-no-match-breakout-and-focus-
+                # followups, design D3/D10): the LLM follow-up gate decides
+                # whether the input refers to the previously answered
+                # entity. The intent's feature is KEPT (the follow-up names
+                # a concrete aspect). A "no" (or LLM failure) stays on the
+                # no-match path, so the breakout stays reachable.
+                if self.followup_check(input_text, focus_entity):
+                    if self.DEBUG:
+                        print(f"Focus follow-up confirmed: filling '{missing_req}' from focus: '{focus_entity}'")
+                    focus_filled = True
+                    match_result = {"kind": "single", "name": focus_entity}
+        if match_result is None:
+            result = self._make_error_response("Nichts gefunden... hier könnte ein Vorschlag kommen", context, intent, lang)
+            result["no_match"] = True
+            return result
 
         if match_result["kind"] == "group" and missing_req == "entity":
-            names = match_result["names"]
-            if self.DEBUG:
-                print(f"Group match for '{missing_req}', offering options: {names}")
-            ctx = dict(context)
-            ctx["options"] = [{"title": name} for name in names]
-            ctx["intent"] = intent.get("intent")
-            output = {"text": BotIntent.getMsg("select_options", lang)}
-            if intent.get("link") is not None:
-                output["link"] = intent.get("link")
-            return {"output": output, "context": ctx}
+            # A weak group (only adjective/loose hits, design D9) defers
+            # to the focus when one exists: e.g. "und wie groß ist sie?"
+            # weakly matches every Groß-* entity, but the user means the
+            # entity of the previous answer - the LLM follow-up gate
+            # decides (same gate as the unmatched path above).
+            focus_entity = focus.get("entity") if isinstance(focus, dict) else None
+            if match_result.get("weak") and focus_entity and self.followup_check(input_text, focus_entity):
+                if self.DEBUG:
+                    print(f"Weak group defers to confirmed focus: '{focus_entity}'")
+                focus_filled = True
+                match_result = {"kind": "single", "name": focus_entity}
+            else:
+                names = match_result["names"]
+                if self.DEBUG:
+                    print(f"Group match for '{missing_req}', offering options: {names}")
+                ctx = dict(context)
+                ctx["options"] = [{"title": name} for name in names]
+                ctx["intent"] = intent.get("intent")
+                output = {"text": BotIntent.getMsg("select_options", lang)}
+                if intent.get("link") is not None:
+                    output["link"] = intent.get("link")
+                return {"output": output, "context": ctx}
 
         # Single match (or group collapsed to its best member for
         # non-entity requirements) fills the requirement as today.
@@ -946,6 +1080,8 @@ class BotIntent:
             result = self._finalize_completion(intent, context, requirements, input_text, lang)
             if arbiter_used:
                 result["llm_used"] = True
+            if focus_filled:
+                result["focus_fill"] = True
             return result
         else:
             if self.DEBUG:
@@ -957,6 +1093,8 @@ class BotIntent:
             out = {"output": {"text": BotIntent.getMsg("continue_completion", lang)}, "context": ctx}
             if arbiter_used:
                 out["llm_used"] = True
+            if focus_filled:
+                out["focus_fill"] = True
             return out
 
     def _handle_with_options(self, intent, input_text, context, options, requirements, lang):
@@ -980,10 +1118,20 @@ class BotIntent:
                 context[missing_req] = matched
                 if self.DEBUG:
                     print(f"Updating context with '{missing_req}': '{matched}'")
+            elif "feature" in requirements and matched:
+                # Feature-pick continuation (conversation-recovery D8): the
+                # offered options were data-carrying features of an already
+                # resolved entity; the intent's provides re-added the empty
+                # feature, so override it with the user's pick.
+                context["feature"] = matched
+                if self.DEBUG:
+                    print(f"Feature pick: overriding feature with '{matched}'")
         else:
             if self.DEBUG:
                 print("Not matched")
-            return self._make_error_response("no_match_completion", context, intent, lang)
+            result = self._make_error_response("no_match_completion", context, intent, lang)
+            result["no_match"] = True
+            return result
         
         # Check if all requirements satisfied
         all_satisfied = all(req in context for req in requirements)

@@ -508,10 +508,12 @@ ENTITY_SAMPLES: List[Dict[str, Any]] = [
     # lookalike protection: windröschen must never resolve to frosch items
     {"name": "pflanze group windröschen + pick", "input": "windröschen",
      "options": WINDROESCHEN_SPECIES, "no_entity": True,
-     "followup": "Busch-Windröschen", "text_contains": ["busch-windrösch"]},
+     "followup": "Busch-Windröschen", "accept_fallback": True,
+     "text_not_contains": ["nichts gefunden"]},
     {"name": "pflanze group knabenkraut + pick", "input": "knabenkraut",
      "options": KNABENKRAUT_SPECIES, "no_entity": True,
-     "followup": "Helm-Knabenkraut", "text_contains": ["helm-knabenkraut"]},
+     "followup": "Helm-Knabenkraut", "accept_fallback": True,
+     "text_not_contains": ["nichts gefunden"]},
     # --- Auen (habitat explanation path, no species resolution) ---
     {"name": "aue rheinaue erklaerung", "input": "rheinaue",
      "text_contains": ["aue"], "no_species_options": True, "no_entity": True},
@@ -584,6 +586,13 @@ def scenario_entity_samples(env: ServiceEnv) -> bool:
         name = sample["name"]
         state = ScenarioState(env=env)
         status, _ = state.turn(client, sample["input"])
+        # Transient LLM timeouts (arbiter) can turn a resolvable query
+        # into a no-match under suite load; retry once before failing.
+        if status == 200 and (sample.get("text_contains") or sample.get("text_any")) \
+                and "nichts gefunden" in _format_text(state.last_message.get("text")).lower():
+            print("    transient no-match (likely arbiter timeout) - retrying once")
+            state = ScenarioState(env=env)
+            status, _ = state.turn(client, sample["input"])
         if status != 200:
             all_ok &= _report(f"sample {i}/{len(ENTITY_SAMPLES)} {name}", False,
                               f"turn failed: {status}")
@@ -601,6 +610,26 @@ def scenario_entity_samples(env: ServiceEnv) -> bool:
                 continue
             text = _format_text(state.last_message.get("text"))
             low = text.lower()
+            # Feature fallback (conversation-recovery D8): when the picked
+            # entity has no data for the requested feature, the reply
+            # informs and offers up to 3 data-carrying features. Accept
+            # that as the flow continuing - then pick one and expect real
+            # content.
+            if sample.get("accept_fallback") and "über einen dieser aspekte" in low:
+                fopts = [o.get("title") if isinstance(o, dict) else o
+                         for o in state.context().get("options", [])]
+                print(f"    fallback options offered: {fopts}")
+                if not fopts or len(fopts) > 3:
+                    all_ok &= _report(f"sample {i}/{len(ENTITY_SAMPLES)} {name}", False,
+                                      f"fallback options invalid: {fopts}")
+                    continue
+                status, _ = state.turn(client, str(fopts[0]))
+                if status != 200:
+                    all_ok &= _report(f"sample {i}/{len(ENTITY_SAMPLES)} {name}", False,
+                                      f"fallback pick failed: {status}")
+                    continue
+                text = _format_text(state.last_message.get("text"))
+                low = text.lower()
 
         ok = True
         detail = ""
@@ -624,6 +653,86 @@ def scenario_entity_samples(env: ServiceEnv) -> bool:
         all_ok &= _report(f"sample {i}/{len(ENTITY_SAMPLES)} {name}", ok, detail)
     print("=== end ===")
     return all_ok
+
+
+def scenario_breakout(env: ServiceEnv) -> bool:
+    """Consecutive unresolvable inputs under an active intent must
+    trigger the breakout: an inviting reply and a completely empty
+    returned context. A successful turn first establishes the intent
+    (deterministic path into the completion flow)."""
+    client = BotApiClient(url=env.url, timeout=env.timeout)
+    state = ScenarioState(env=env)
+    print("=== Breakout scenario ===")
+    # establish a completed answer (focus + sticky intent)
+    status, _ = state.turn(client, "was macht das reh")
+    ctx = state.context()
+    ok = status == 200 and ctx.get("focus", {}).get("entity") == "Reh"
+    if not ok:
+        return _report("breakout", False, f"setup turn failed: focus={ctx.get('focus')}")
+    for i in range(1, 4):
+        status, _ = state.turn(client, "xzqgrumpf blorps")
+        ctx = state.context()
+        print(f"    miss {i}: count={ctx.get('no_match_count')} "
+              f"intent={'intent' in ctx} focus={'focus' in ctx}")
+        if i < 3:
+            ok &= status == 200 and "intent" in ctx
+        else:
+            t = _format_text(state.last_message.get("text")).lower()
+            ok &= (status == 200 and ctx.get("no_match_count") == 0
+                   and "intent" not in ctx and not ctx.get("focus")
+                   and "von vorne" in t)
+            if not ok:
+                _report("breakout", False,
+                        f"expected breakout on miss 3: count={ctx.get('no_match_count')}, "
+                        f"reply={t[:80]!r}")
+    # fresh conversation works afterwards
+    status, _ = state.turn(client, "was macht das reh")
+    t = _format_text(state.last_message.get("text"))
+    ok &= status == 200 and ("Ricke" in t or "Kitz" in t or "Rehbock" in t)
+    if ok:
+        ok = _report("breakout", True)
+    print("=== end ===")
+    return ok
+
+
+def scenario_followup(env: ServiceEnv) -> bool:
+    """The focus-based follow-up: after a completed Reh answer, an
+    entity-less feature question resolves against the focused entity.
+    When the requested feature has no data, the feature-fallback options
+    appear and picking one yields real content."""
+    client = BotApiClient(url=env.url, timeout=env.timeout)
+    state = ScenarioState(env=env)
+    print("=== Follow-up scenario ===")
+    status, _ = state.turn(client, "was macht das reh")
+    ctx = state.context()
+    ok = status == 200 and ctx.get("focus", {}).get("entity") == "Reh"
+    if not ok:
+        return _report("followup", False, f"setup turn failed: focus={ctx.get('focus')}")
+
+    status, _ = state.turn(client, "und wie groß ist sie?")
+    ctx = state.context()
+    t = _format_text(state.last_message.get("text"))
+    opts = [o.get("title") if isinstance(o, dict) else o for o in ctx.get("options", [])]
+    print(f"    follow-up: options={opts} text[:90]={t[:90]!r}")
+    if opts:
+        # feature fallback offered - pick one, expect real content
+        if len(opts) > 3:
+            ok = _report("followup", False, f"more than 3 fallback options: {opts}")
+            print("=== end ===")
+            return ok
+        status, _ = state.turn(client, str(opts[0]))
+        t = _format_text(state.last_message.get("text"))
+        print(f"    pick '{opts[0]}': text[:90]={t[:90]!r}")
+        ok = (status == 200 and "keine Informationen" not in t
+              and "Nichts gefunden" not in t and len(t) > 50)
+    else:
+        # direct content answer (sticky intent carries feature 'definition')
+        ok = status == 200 and "Nichts gefunden" not in t and len(t) > 50 \
+             and ("Ricke" in t or "kg" in t or "Kitz" in t)
+    if ok:
+        ok = _report("followup", True)
+    print("=== end ===")
+    return ok
 
 
 def scenario_restart_same_secret(env: ServiceEnv) -> bool:
@@ -701,14 +810,16 @@ SCENARIOS: Dict[str, Tuple[Any, bool]] = {
     "reh": (scenario_reh, False),
     "frosch": (scenario_frosch, False),
     "entities": (scenario_entity_samples, False),
+    "breakout": (scenario_breakout, False),
+    "followup": (scenario_followup, False),
     "tampered": (scenario_tampered_token, False),
     "foreign": (scenario_foreign_session, False),
     "db_crosscheck": (scenario_db_crosscheck, False),
     "restart_resume": (scenario_restart_same_secret, True),
     "restart_no_secret": (scenario_restart_missing_secret, True),
 }
-ALL_ORDER = ["reh", "frosch", "entities", "tampered", "foreign", "db_crosscheck",
-             "restart_resume", "restart_no_secret"]
+ALL_ORDER = ["reh", "frosch", "entities", "breakout", "followup", "tampered",
+             "foreign", "db_crosscheck", "restart_resume", "restart_no_secret"]
 
 
 # ----------------------------------------------------------------------

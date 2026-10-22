@@ -544,6 +544,22 @@ class BotAction:
                 if values["text"] == [] and values["image"] == [] and values["audio"] == []:
                     #return {}
                     values["text"] = ["Zu dieser Eigenschaft sind für " + name + " leider keine Informationen vorhanden."]
+                    # Feature fallback (conversation-recovery, design D8):
+                    # report up to 3 other fields of this entity that have
+                    # data, so the caller can offer them as options instead
+                    # of dead-ending on the empty feature.
+                    meta_keys = {"Name", "Name_alt", "Name_eng", "Name_sci",
+                                 "Typ", "Gruppe", "Links"}
+                    requested = set(searchKeys)
+                    available = []
+                    for f in items:
+                        for k, v in f.items():
+                            if v and k not in meta_keys and k not in requested and k not in available:
+                                available.append(k)
+                    available = available[:3]
+                    if available:
+                        values["no_feature_data"] = True
+                        values["available_features"] = available
                 return values
             else:
                 print("No matching entity found for features:", name)

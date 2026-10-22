@@ -107,6 +107,7 @@ for i in intents.data[:5]:
 # load actions to intents
 intents.setActions(context_path)
 intents.setThreshold(65)  # set fuzzy match threshold
+intents.setMaxNoMatch(3)  # breakout limit for consecutive no-match turns
 intents.setLlm(llm)       # LLM client for the entity arbiter
 
 if DEBUG: 
@@ -583,6 +584,27 @@ def route_handler():
             status="ok"
     
         ctx = result.get("context", {})
+
+        # No-match breakout (add-no-match-breakout-and-focus-followups,
+        # design D1/D2): count consecutive unresolved turns centrally so
+        # both no-match sites are covered; at the configured limit, clear
+        # the context entirely and invite the user to start over.
+        # Focus-filled turns count as misses only when they could not
+        # answer (feature fallback, design D10); helpful answers reset.
+        if result.get("no_match") or (
+                result.get("focus_fill") and result.get("no_feature_data")):
+            misses = int(ctx.get("no_match_count") or 0) + 1
+            if DEBUG: print(f"No-match turn {misses}/{intents.getMaxNoMatch()}")
+            if misses >= intents.getMaxNoMatch():
+                ctx = {}
+                message = {"text": "Ich hab dich leider nicht verstanden. Lass uns von vorne beginnen - stell deine Frage einfach neu!"}
+                status = "ok"
+                misses = 0
+                if DEBUG: print("Breakout: context cleared, conversation restarts.")
+            ctx["no_match_count"] = misses
+        else:
+            ctx["no_match_count"] = 0
+
         # Normalize the outgoing message so text is always a single
         # string and media lists are collapsed before storage/response.
         normalize_tx_message(message)
