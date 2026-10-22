@@ -15,6 +15,7 @@ import random
 import botText
 from botText import german_stem
 from botActions import BotAction
+from botLlm import OpenAICompatClient
 
 
 # Context schema (shared static JSON) ------------------------------------------------
@@ -120,6 +121,8 @@ class BotIntent:
         self.actionCtl = None
         self.actionNames = []
         self.matchThreshold = 75  # default fuzzy match threshold
+        self.llm = None           # LLM client for the entity arbiter
+        self._domain_lists_cache = None  # cached arbiter candidate lists
 
         # load data file (accept list, dict-of-dicts or single dict)
         try:
@@ -191,6 +194,14 @@ class BotIntent:
         self.matchThreshold = int(threshold)
         if self.actionCtl is not None:
             self.actionCtl.setThreshold(self.matchThreshold)
+
+    def setLlm(self, llm):
+        """Inject the LLM client used by the entity arbiter.
+
+        When not set, the arbiter lazily constructs a client from the
+        private config (same pattern as botCtl.py / botDecoder.py).
+        """
+        self.llm = llm
 
     def getThreshold(self):
         """Get the fuzzy match threshold (0-100)."""
@@ -471,21 +482,31 @@ class BotIntent:
         # inflated WRatio scores against long names and would match
         # spuriously, so the fallback only considers stems of 5+
         # characters - long enough for real typo-style queries.
+        #
+        # A candidate is only accepted when the token stem and the
+        # candidate name stem share their first three characters
+        # (umlaut-mapped on both sides): WRatio inflates scores for
+        # lookalikes ("feuchtwies" -> "efeu" at 77.1, "luchs" ->
+        # "rotfuchs" at 80.0), while a genuine typo shares the prefix
+        # ("feuchtwies" -> "feuchtwiesen" at 90.9). Differently-prefixed
+        # typos are left to the entity arbiter (fix-entity-resolution-
+        # fallback design D2/D1).
         best = None  # (score, name)
         for token in botText.normalize(input_text):
             if len(token) < 5:
                 continue
-            match = process.extractOne(
+            matches = process.extract(
                 token, [str(i).lower() for i in items],
-                scorer=fuzz.WRatio, processor=matchProcessor,
+                scorer=fuzz.WRatio, processor=matchProcessor, limit=5,
             )
-            if not match:
-                continue
-            _, score, idx = match[0], match[1], match[2] if len(match) > 2 else None
-            if idx is None:
-                continue
-            if best is None or score > best[0]:
-                best = (score, str(items[idx]))
+            for cand, score, idx in matches:
+                if score < self.matchThreshold:
+                    break  # matches are ordered by score descending
+                if german_stem(str(items[idx]))[:3] != token[:3]:
+                    continue
+                if best is None or score > best[0]:
+                    best = (score, str(items[idx]))
+                break  # best prefix-compatible candidate for this token
 
         if best and best[0] >= self.matchThreshold:
             if self.DEBUG:
@@ -495,6 +516,129 @@ class BotIntent:
         if self.DEBUG:
             print("No staged match found.")
         return None
+
+    # ------------------------------------------------------------------
+    # Entity arbiter (fix-entity-resolution-fallback): LLM-assisted
+    # recovery on the no-match path. See the entity-arbiter spec.
+    # ------------------------------------------------------------------
+    ARBITER_SYSTEM_PROMPT = (
+        "Du bist ein Entitäts-Klassifizierungssystem für einen Chatbot über "
+        "Tiere, Pflanzen und Lebensräume (Auen) im Karlsruher Rheinauen-Gebiet. "
+        "Dir wird eine Nutzereingabe gegeben sowie drei Listen mit gültigen "
+        "Entitätsnamen, gruppiert nach Domäne (Tier, Pflanze, Auen). "
+        "Bestimme, welche Entität aus den Listen die Nutzereingabe meint - "
+        "auch wenn der Name nur Teil eines längeren Satzes ist oder leicht "
+        "falsch geschrieben ist. Antworte NUR mit JSON im Format "
+        '{"found": true/false, "domain": "Tier"|"Pflanze"|"Auen", "name": "<Name aus den Listen>"} . '
+        "Wenn die Eingabe keine Entität aus den Listen meint, antworte mit "
+        '{"found": false, "domain": null, "name": null}. '
+        "Der Name MUSS exakt einem Namen aus den Listen entsprechen."
+    )
+
+    def _get_llm(self):
+        """Return the injected LLM client, or lazily build one from the
+        private config (same fallback pattern as botCtl.py)."""
+        if self.llm is not None:
+            return self.llm
+        try:
+            import private as pr
+            llm = OpenAICompatClient(
+                base_url=pr.baseUrl,
+                api_key=pr.apiKey,
+                emb_url=getattr(pr, "embUrl", pr.baseUrl),
+                chat_model=pr.lngMdl,
+                embed_model=getattr(pr, "embMdl", None),
+            )
+            llm.setDebug(self.DEBUG)
+            self.llm = llm
+            return llm
+        except Exception as e:
+            if self.DEBUG:
+                print("Arbiter: no LLM client available:", e)
+            return None
+
+    def _domain_lists(self):
+        """Load and cache the arbiter candidate lists from the three
+        domain files. Returns {"Tier": [...], "Pflanze": [...], "Auen": [...]}
+        or None when a file is missing."""
+        if self._domain_lists_cache is not None:
+            return self._domain_lists_cache
+        lists = {}
+        try:
+            for domain, fname in (("Tier", "entity_tiere.json"),
+                                  ("Pflanze", "entity_pflanzen.json"),
+                                  ("Auen", "entity_aue.json")):
+                path = os.path.join(os.path.dirname(__file__), "data", fname)
+                with open(path, "r", encoding="utf-8") as f:
+                    lists[domain] = [str(n).strip() for n in json.load(f)]
+        except Exception as e:
+            if self.DEBUG:
+                print("Arbiter: candidate lists unavailable:", e)
+            return None
+        self._domain_lists_cache = lists
+        return lists
+
+    def _validate_arbiter_answer(self, answer):
+        """Strictly validate an arbiter answer against the domain lists.
+
+        Returns the validated entity name, or None. An answer is valid
+        only when `found` is true, the domain is one of the three
+        candidate domains, and the name matches exactly one entry of
+        THAT domain's file (case-insensitive, whitespace-trimmed).
+        """
+        if not isinstance(answer, dict):
+            return None
+        if not answer.get("found"):
+            return None
+        domain = answer.get("domain")
+        name = answer.get("name")
+        if not isinstance(domain, str) or not isinstance(name, str):
+            return None
+        lists = self._domain_lists()
+        if lists is None or domain not in lists:
+            return None
+        wanted = name.strip().lower()
+        for candidate in lists[domain]:
+            if candidate.lower() == wanted:
+                return candidate
+        return None
+
+    def arbiter_resolve_entity(self, input_text):
+        """LLM-assisted entity recovery for the no-match path.
+
+        Makes exactly one chat call classifying the input against the
+        three domain candidate lists. Returns the validated entity name
+        (canonical casing from the candidate file) or None - None covers
+        "not found", invalid/hallucinated answers, and LLM failures; the
+        caller continues on the existing no-match path in all of them.
+        """
+        lists = self._domain_lists()
+        llm = self._get_llm()
+        if lists is None or llm is None:
+            return None
+
+        lists_text = "\n".join(
+            f"{domain} ({len(names)} Namen): {', '.join(names)}"
+            for domain, names in lists.items()
+        )
+        try:
+            answer = llm.chat_json(
+                temperature=0.0,
+                system=self.ARBITER_SYSTEM_PROMPT,
+                user=f"Nutzereingabe: '{input_text}'\n\n{lists_text}",
+                schema_hint='{"found": bool, "domain": "Tier"|"Pflanze"|"Auen"|null, "name": string|null}',
+            )
+        except Exception as e:
+            if self.DEBUG:
+                print("Arbiter: LLM call failed:", e)
+            return None
+
+        if self.DEBUG:
+            print("Arbiter: raw answer:", answer)
+        validated = self._validate_arbiter_answer(answer)
+        if self.DEBUG:
+            print("Arbiter: validated name:", validated)
+        return validated
 
     def _match_input_to_options(self, input_text, options):
         """
@@ -743,10 +887,27 @@ class BotIntent:
         # match offers the members as options instead of filling the
         # requirement arbitrarily; a single match fills it directly.
         match_result = self._match_input_to_items_structured(input_text, items)
+        arbiter_used = False
         if match_result is None:
             if self.DEBUG:
                 print("No staged match found for input.")
-            return self._make_error_response("Nichts gefunden... hier könnte ein Vorschlag kommen", context, intent, lang)
+            # Entity arbiter (fix-entity-resolution-fallback): one LLM
+            # recovery attempt before giving up. Any failure (not found,
+            # invalid answer, LLM unavailable) falls through to the
+            # existing no-match error response.
+            recovered = self.arbiter_resolve_entity(input_text) if missing_req == "entity" else None
+            if recovered is None:
+                return self._make_error_response("Nichts gefunden... hier könnte ein Vorschlag kommen", context, intent, lang)
+            if self.DEBUG:
+                print(f"Arbiter recovered '{missing_req}': '{recovered}'")
+            arbiter_used = True
+            match_result = {"kind": "single", "name": recovered}
+            # The recovered entity usually belongs to a different domain
+            # than the decoded intent (e.g. an Auen name under a tp_*
+            # intent), so the intent-provided feature often has no data
+            # for it (e.g. 'generell'). 'definition' maps to the full
+            # key list (design D7), which every entity has content for.
+            context["feature"] = "definition"
 
         if match_result["kind"] == "group" and missing_req == "entity":
             names = match_result["names"]
@@ -782,7 +943,10 @@ class BotIntent:
         if all_satisfied:
             if self.DEBUG:
                 print("All requirements satisfied.")
-            return self._finalize_completion(intent, context, requirements, input_text, lang)
+            result = self._finalize_completion(intent, context, requirements, input_text, lang)
+            if arbiter_used:
+                result["llm_used"] = True
+            return result
         else:
             if self.DEBUG:
                 print("Some requirements still missing.")
@@ -790,7 +954,10 @@ class BotIntent:
             ctx = dict(context)
             ctx["intent"] = intent.get("intent")
             
-            return {"output": {"text": BotIntent.getMsg("continue_completion", lang)}, "context": ctx}
+            out = {"output": {"text": BotIntent.getMsg("continue_completion", lang)}, "context": ctx}
+            if arbiter_used:
+                out["llm_used"] = True
+            return out
 
     def _handle_with_options(self, intent, input_text, context, options, requirements, lang):
         """

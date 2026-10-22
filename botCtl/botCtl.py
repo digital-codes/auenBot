@@ -34,6 +34,7 @@ from sqlalchemy.orm import declarative_base, Session, session, sessionmaker
 import signal
 import sys
 import os
+import re
 
 from sympy import sequence
 
@@ -42,6 +43,7 @@ DEBUG = True
 from botIntents import BotIntent
 from botLlm import OpenAICompatClient
 from botDecoder import BotDecoder
+from botQa import open_state, seal_state
 
 import subprocess
 
@@ -105,6 +107,7 @@ for i in intents.data[:5]:
 # load actions to intents
 intents.setActions(context_path)
 intents.setThreshold(65)  # set fuzzy match threshold
+intents.setLlm(llm)       # LLM client for the entity arbiter
 
 if DEBUG: 
     print("Intents with actions loaded.")
@@ -207,9 +210,44 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 # ----------------------------------------------------------------------
 # 3️⃣ Placeholder state‑machine implementation
 # ----------------------------------------------------------------------
+# Injection-prone characters rejected from user input (ported from the
+# CodeforKarlsruhe fork): backtick, braces, pipe, dollar, semicolon,
+# ampersand, angle brackets.
+_DANGEROUS_CHARS_RE = re.compile(r'[`{}\|\$;&<>]')
+# C0 control characters except common whitespace (tab/newline/CR).
+_CONTROL_CHARS_RE = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
+# Any HTML tag like <...>.
+_HTML_TAG_RE = re.compile(r'<[^>]+>')
+
+
+def sanitize_message_text(message: Dict[str, Any]) -> None:
+    """Reject non-plain-text message input with HTTP 400.
+
+    Validates that ``message.text`` is a non-empty plain-text string:
+    no HTML tags, no injection-prone characters, no control characters
+    beyond tab/newline/CR. Umlauts and unicode letters pass unchanged.
+    Runs before any pipeline processing.
+    """
+    if not isinstance(message, dict):
+        abort(make_response(jsonify(error="invalid request"), 400))
+
+    text = message.get("text", "")
+    if not isinstance(text, str) or text.strip() == "":
+        abort(make_response(jsonify(error="invalid request"), 400))
+
+    if _HTML_TAG_RE.search(text):
+        abort(make_response(jsonify(error="invalid request"), 400))
+    if _DANGEROUS_CHARS_RE.search(text):
+        abort(make_response(jsonify(error="invalid request"), 400))
+    if _CONTROL_CHARS_RE.search(text):
+        abort(make_response(jsonify(error="invalid request"), 400))
+
+
 def check_input(validated: Dict[str, Any]) -> Dict[str, Any]:
     if DEBUG: print("Check input on: ",validated)
     message = validated.get("message", {})
+    # plain-text validation before anything else (see request-sanitization spec)
+    sanitize_message_text(message)
     lang = validated.get("lang", "de")
     session = validated.get("session", "")
     try:
@@ -243,7 +281,17 @@ def check_input(validated: Dict[str, Any]) -> Dict[str, Any]:
             if DEBUG: print("Could not start startModels.sh:", e)
 
     else:
-        ctx = validated.get("context", {})
+        # Conversation state arrives only as an opaque sealed token.
+        # There is no plaintext fallback: a missing, tampered, malformed,
+        # or foreign-session token is a 400 (see state-token-encryption spec).
+        state_token = validated.get("state", None)
+        if not isinstance(state_token, str) or state_token == "":
+            return {"status": "error", "context": {}}
+        try:
+            ctx = open_state(state_token, session)
+        except Exception as e:
+            if DEBUG: print("State token rejected:", type(e).__name__, e)
+            return {"status": "error", "context": {}}
         if not isinstance(ctx, dict):
             return {"status": "error", "context": {}}
 
@@ -493,7 +541,7 @@ def route_handler():
             return (
                 jsonify(
                     {
-                        "context": ctx,
+                        "state": seal_state(ctx, session),
                         "message": output,
                         "session": session,
                         "sequence": sequence,
@@ -550,13 +598,14 @@ def route_handler():
             session=session,
             sequence=sequence,
             lang=lang,
-            ctx=ctx
+            ctx=ctx,
+            llm_used=result.get("llm_used", False)
         )
 
-        # 200 OK – final context record
+        # 200 OK – sealed state token + final message
         # FIXME copy output into content to satsify auenlaend app
         return (
-            jsonify({"context": ctx,"message":message, "session": session, "sequence":sequence + 1, lang:lang}),
+            jsonify({"state": seal_state(ctx, session),"message":message, "session": session, "sequence":sequence + 1, lang:lang}),
             200,
         )
 

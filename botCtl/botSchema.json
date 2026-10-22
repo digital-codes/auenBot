@@ -35,47 +35,10 @@
             },
             "required": ["text"]
         },
-        "context": {
-            "type": "object",
+        "state": {
+            "type": "string",
             "value": null,
-            "comment": "Contextual information for the conversation",
-            "properties": {
-                "intent": {
-                    "type": "string",
-                    "value": null,
-                    "comment": "Detected user intent name"
-                },
-                "last_intent": {
-                    "type": "string",
-                    "value": null,
-                    "comment": "Conversation history: intent"
-                },
-                "last_input": {
-                    "type": "string",
-                    "value": null,
-                    "comment": "Conversation history: input text"
-                },
-                "type": {
-                    "type": "string",
-                    "value": null,
-                    "comment": "Specifier for type (e.g. tier)"
-                },
-                "entity": {
-                    "type": "string",
-                    "value": null,
-                    "comment": "Specifier for specific species (e.g wasserfrosch)"
-                },
-                "feature": {
-                    "type": "string",
-                    "value": null,
-                    "comment": "Specifier for specific key of entity (e.g habitat)"
-                },
-                "options": {
-                    "type": "array",
-                    "items": {},
-                    "comment": "Optional list of selectable options or suggestions"
-                }
-            }
+            "comment": "Opaque sealed conversation-state token (replaces context). Omitted for a new session."
         }
     },
     "required": [
