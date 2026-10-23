@@ -868,6 +868,15 @@ class BotIntent:
             action_result = self._process_action(intent, input_text, ctx, lang)
             output = action_result if action_result else {"text": BotIntent.getMsg("completed", lang)}
 
+            # Metis undecided category (metis-routing spec): the overview
+            # answered the turn, but feature options are offered; keep the
+            # pending-completion marker so the pick lands in this flow and
+            # sets the feature (same continuation as the feature fallback).
+            if action_result and action_result.get("feature_pick"):
+                ctx.pop("feature", None)
+                ctx["options"] = action_result.get("options") or []
+                return {"output": output, "context": ctx, "completed": True}
+
             # Feature fallback (add-no-match-breakout-and-focus-followups,
             # design D8): when the requested feature has no data for the
             # resolved entity, inform the user and offer up to 3 of the

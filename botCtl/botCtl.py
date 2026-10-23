@@ -43,6 +43,8 @@ DEBUG = True
 from botIntents import BotIntent
 from botLlm import OpenAICompatClient
 from botDecoder import BotDecoder
+from botMetis import MetisRouter, INTENT_ROUTING, SOCIAL_INTENTS, \
+    P_SOCIAL, UNRELATED, FOLLOWUP, NEW_TOPIC
 from botQa import open_state, seal_state
 
 import subprocess
@@ -103,6 +105,17 @@ intents = BotIntent(intents_path)
 print(f"Loaded intent '{intents.name}' with {len(intents.data)} entries.")
 for i in intents.data[:5]:
     print(i["intent_de"])
+
+# Metis routing (add-metis-decision-routing): the coarse bio_frage record
+# is appended to the intent data so intents.execute() finds it; the other
+# coarse intents route onto existing records (see INTENT_ROUTING).
+metis_router = MetisRouter()
+if metis_router.enabled():
+    for rec in json.load(open("./data/intents_metis.json", encoding="utf-8")).get("intents", []):
+        intents.data.append(rec)
+    print("Metis routing enabled (stage-1/2 decision model).")
+else:
+    print("Metis routing disabled, legacy decoder only.")
 
 # load actions to intents
 intents.setActions(context_path)
@@ -497,6 +510,12 @@ def route_handler():
     # (intent_name_or_None, options_or_None, llm_used); the callers own
     # all context mutation, history storage and responses.
     def _decode_new_intent():
+        if metis_router.enabled():
+            try:
+                return _decode_new_intent_metis()
+            except Exception as e:
+                if DEBUG:
+                    print("Metis routing failed, legacy decoder fallback:", e)
         detection, llmUsed = decoder.detectIntent(user_input)
         if isinstance(detection, str):
             return detection, None, llmUsed
@@ -504,6 +523,49 @@ def route_handler():
             return None, detection, llmUsed
         fallback = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")
         return fallback["intent"], None, llmUsed
+
+    def _decode_new_intent_metis():
+        """Metis stage 1 + routing order (metis-routing spec, design D2).
+
+        Mutates ctx for the followup/new_topic transitions (focus reuse
+        and focus clear); the callers own all other context handling.
+        """
+        focus = ctx.get("focus") if isinstance(ctx.get("focus"), dict) else {}
+        res = metis_router.detect(
+            user_input,
+            focus_entity=focus.get("entity"),
+            focus_type=focus.get("type"),
+            prev_answered=bool(ctx.get("last_intent")),
+        )
+        if DEBUG:
+            print("Metis stage 1:", {k: v for k, v in res.items() if k != "probs"})
+        name = res["intent"]
+        p_name = res["probs"].get(name, 0.0)
+
+        # 1. Social intents win first: smalltalk is "unrelated" to the
+        #    center too, so the unrelated route must not shadow it.
+        if name in SOCIAL_INTENTS and p_name > P_SOCIAL:
+            return INTENT_ROUTING[name], None, True
+        # 2. Unrelated input routes to the fallback intent.
+        fallback = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")["intent"]
+        if res["unrelated"] >= UNRELATED or name == "fallback":
+            return fallback, None, True
+        # 3. Any non-bio intent routes to its existing machinery.
+        if name != "bio_frage":
+            return INTENT_ROUTING.get(name, fallback), None, True
+        # 4. Follow-up: reuse the focused entity, skip the entity search.
+        if res["followup"] >= FOLLOWUP and focus.get("entity"):
+            cat = metis_router.category(user_input, focus["entity"])
+            if DEBUG:
+                print("Metis stage 2 (focus):", cat["category"], "tie:", cat["tie"])
+            ctx["entity"] = focus["entity"]
+            ctx["type"] = focus.get("type")
+            ctx["feature"] = "" if cat["tie"] else cat["category"]
+            return "bio_frage", None, True
+        # 5. Fresh bio question: a clear new topic starts without focus.
+        if res["new_topic"] >= NEW_TOPIC:
+            ctx.pop("focus", None)
+        return "bio_frage", None, True
 
     # Shared tail of both option-prompt sites (fresh decode and no-match
     # fallback): offer the decoded intent options and end the turn.

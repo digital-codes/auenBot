@@ -1,0 +1,17 @@
+{
+  "verhalten": {
+    "label": "Verhalten",
+    "criteria": "Wie das Lebewesen lebt und sich verhält: Nahrung und Beutetiere, Fortpflanzung, Lebensraum, Feinde, Rufe und Laute, Überwinterung, Alter und Lebenserwartung",
+    "columns": ["Lebensraum", "Habitat", "Fortpflanzung", "Paarung", "Lebensweise", "Verhalten", "Überwinterung", "Feinde", "Nahrung", "Alter", "Lebenserwartung"]
+  },
+  "eigenschaften": {
+    "label": "Eigenschaften",
+    "criteria": "Wie etwas aussieht und beschaffen ist: Größe, Gewicht, Aussehen, Erkennungsmerkmale, Blütezeit, Früchte, Genießbarkeit, Verwendung, Giftigkeit",
+    "columns": ["Größe", "Gewicht", "Erkennungsmerkmale", "Blütezeit", "Frucht", "Genießbarkeit", "Verwendung", "Giftigkeit"]
+  },
+  "beschreibung": {
+    "label": "Beschreibung",
+    "criteria": "Allgemeine Angaben: Name, wissenschaftlicher Name, Familie, Gattung, Klasse, ökologische Bedeutung, Schutzstatus, Wissenswertes",
+    "columns": ["Name", "Name_sci", "Name_alt", "Klasse", "Unterklasse", "Familie", "Gattung", "Ökologische Bedeutung", "Schutz", "Wissenswertes"]
+  }
+}

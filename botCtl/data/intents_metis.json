@@ -1,0 +1,39 @@
+{
+  "criteria": {
+    "smalltalk": "Begrüßung, Abschied, Höflichkeit oder Wohlbefinden, zum Beispiel Hallo, Tschüss, Danke, Wie geht es dir; kurze Zustimmung oder Ablehnung wie ja, nein, nö; Gefühlsäußerungen wie Freude, Frust oder Unentschlossenheit, zum Beispiel Ich bin so traurig, Ich kann mich nicht entscheiden, Ich will aber; Kommentare über das Gespräch, zum Beispiel Das wollte ich gar nicht wissen; Ansprache des Bots mit Namen wie Karla; WICHTIG: Fragen an den Bot selbst, meist erkennbar an Wörtern wie dein, deine, mein, meine oder du, zum Beispiel Was ist dein Lieblingstier, Gibt es Tiere die du besonders magst, Wie alt bist du, Was machst du gerne, Wer ist dein bester Freund; Bitte um eine Themenauswahl; den Bot zurücksetzen oder von vorne beginnen",
+    "beleidigung": "Beleidigung, Beschimpfung oder unhöfliche Äußerung gegen den Bot, zum Beispiel Dummes Huhn, Drecksau, blöd",
+    "bio_frage": "Eine Frage über Tiere, Pflanzen oder Auen, zum Beispiel nach Lebensweise, Verhalten, Aussehen, Größe, Fortpflanzung oder Namen; auch nach dem Rhein, dem Oberrhein, der Begradigung des Rheins oder der Auenlandschaft; NICHT: Fragen nach dem Lieblingstier, der Lieblingspflanze oder den Vorlieben des Bots",
+    "nazka_info": "Allgemeine Fragen zum Naturschutzzentrum selbst, zum Beispiel Öffnungszeiten, Eintrittspreise, Mitarbeiter, was ein Ranger macht oder was das Zentrum überhaupt ist",
+    "anreise": "Anreise und Lage des Naturschutzzentrums, zum Beispiel wie man mit Auto, Bus, Bahn oder Fahrrad hinkommt, Parkplätze, Adresse, Standort, Kontaktdaten",
+    "ausstellungen": "Fragen zu Ausstellungen im Zentrum, zum Beispiel Dauerausstellung, Sonderausstellung, Sprache der Ausstellung",
+    "kinder": "Angebote speziell für Kinder und Familien mit Kindern, zum Beispiel Auen-Zwerge, Naturspürnasen, Spielplatz, Ferienprogramm, Kindergeburtstag, Kinderbereich der Ausstellung, was man mit Kindern machen kann",
+    "aktivitaeten": "Unternehmungen und Angebote in und um die Aue, zum Beispiel Wandern, Radfahren, Pamina-Radweg, Auenerlebnispfad, Geocaching, Actionbound, aktuelle Angebote, Veranstaltungen, was kann man dort machen",
+    "essen": "Essen, Trinken und Verpflegung, zum Beispiel Gastronomie, Picknick, Grillplatz",
+    "hunde": "Alles rund um Hunde, zum Beispiel ob Hunde ins Zentrum oder in die Ausstellung mitgebracht werden dürfen",
+    "fuehrungen": "Geführte Touren, zum Beispiel Führungen für Gruppen, Schulklassen, individuelle Führungen, Führungskalender",
+    "barrierefreiheit": "Zugänglichkeit für Menschen mit Behinderung, zum Beispiel Rollstuhl, Aufzug, sehbehindert",
+    "toiletten": "Toiletten und Sanitäranlagen vor Ort",
+    "wetter": "Aktuelles Wetter oder Wettervorhersage, zum Beispiel am Rhein oder in Karlsruhe",
+    "messdaten": "Messdaten und Messwerte, zum Beispiel Rhein-Wasserstand, Abfluss, Wassertemperatur sowie Luftwerte: Luftqualitätsindex LQI, Ozon O3, Stickstoff-Dioxid NO2, Feinstaub PM2,5 und PM10; Bedeutung von Alarmschwelle und Informationsschwelle; woher die Daten kommen",
+    "expertise": "Der Nutzer möchte an einen Experten weitergeleitet werden, ist unzufrieden weil der Bot nicht helfen konnte, oder stellt eine Fachfrage, die das Wissen des Bots übersteigt",
+    "fallback": "etwas anderes, das in keine der Kategorien passt"
+  },
+  "intents": [
+    {
+      "id": "metis_bio_frage",
+      "intent": "bio_frage",
+      "intent_de": "bio frage",
+      "utter": "",
+      "utter_de": "",
+      "handler": "complete",
+      "action": "bio_feature",
+      "requires": "entity,feature",
+      "provides": { "feature": "" },
+      "options": null,
+      "link": null,
+      "alias_de": "bio frage",
+      "alias_en": "bio question",
+      "alias_fr": "question bio"
+    }
+  ]
+}

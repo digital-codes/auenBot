@@ -126,6 +126,12 @@ tp_entities = list(tt.Name.unique()) + list(tp.Name.unique())
 with open(dest_dir + "entity_tp.json","w",encoding="utf-8") as f:
     json.dump(tp_entities,f,ensure_ascii=False, indent=2)
 
+# Metis routing (add-metis-decision-routing): bio_frage resolves entities
+# across all three domains (tiere, pflanzen, auen)
+bio_entities = list(tt.Name.unique()) + list(tp.Name.unique()) + list(ta.Name.unique())
+with open(dest_dir + "entity_bio.json","w",encoding="utf-8") as f:
+    json.dump(bio_entities,f,ensure_ascii=False, indent=2)
+
 k = list(tt.Klasse.unique())
 with open(dest_dir + "klasse_tiere.json","w",encoding="utf-8") as f:
     json.dump(k,f,ensure_ascii=False, indent=2)

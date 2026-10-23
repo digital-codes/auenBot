@@ -11,6 +11,8 @@ except ImportError:
     from fuzzywuzzy import process, fuzz, utils
     matchProcessor = utils.full_process
 
+from botMetis import MetisRouter, CATEGORIES
+
 
 
 # ----------------------------------------------------------------------
@@ -97,6 +99,22 @@ class BotAction:
         self.DEBUG = True
         self.matchThreshold = 75
 
+        # Metis category map (add-metis-decision-routing): column groups
+        # for the stage-2 categories; optional file, legacy flow continues
+        # without it.
+        self.category_map = {}
+        try:
+            cpath = os.path.join(os.path.dirname(__file__), "data", "category_map.json")
+            with open(cpath, "r", encoding="utf-8") as f:
+                self.category_map = json.load(f)
+        except Exception as e:
+            if self.DEBUG:
+                print("Category map not loaded (Metis categories unavailable):", e)
+
+        # Metis router for the stage-2 category decision; created lazily
+        # here (not injected) so BotAction stays standalone-testable.
+        self.metis = MetisRouter()
+
 
     def execute(self, handler_name, input=None, context=None, lang="de"):
         """
@@ -161,21 +179,63 @@ class BotAction:
         """
         Handler for 'bio_feature' action.
         Expects parameters like: {'entity': 'entity_name', 'feature': 'feature_key'}
+
+        With Metis routing enabled an empty feature (or one that already is
+        a stage-2 category) is decided by the Metis category request; an
+        undecided answer merges all categories and offers feature options.
         """
         if self.DEBUG:
             print(f"Handling 'bio_feature' with parameters: {input}")
-        
+
         entity_name = context.get("entity", "") if context else ""
         feature_key = context.get("feature", "") if context else ""
-        
-        if not entity_name or not feature_key:
+
+        if not entity_name or (not feature_key and not self.metis.enabled()):
             return False, {"error": "Missing entity or feature parameter"}
-        
+
+        tie = False
+        if self.metis.enabled() and (
+            not feature_key or feature_key.lower() in CATEGORIES
+        ):
+            cat = self.metis.category(input or "", entity_name)
+            if self.DEBUG:
+                print(f"Metis stage 2: category '{cat['category']}' tie={cat['tie']} conf={cat['confidence']}")
+            tie = cat["tie"]
+            feature_key = "definition" if tie else cat["category"]
+
         features = self.get_entity_features(entity_name, feature_key)
         if features:
+            if tie:
+                # Undecided (metis-routing spec): compact overview of all
+                # categories plus 2-3 options drawn from the entity's
+                # actually filled feature columns. `feature_pick` keeps
+                # the completion flow pending so the pick sets the feature.
+                options = self._filled_features(entity_name, limit=3)
+                if options:
+                    features["options"] = [{"title": o} for o in options]
+                    features["feature_pick"] = True
+                if features.get("text"):
+                    features["text"] = [
+                        f"Über {entity_name} kann ich dir einiges erzählen. Was interessiert dich?"
+                    ] + features["text"]
             return True, features
         else:
             return False, {"text": bot_utters[lang].get("tp_unclear", "No information found")}
+
+    def _filled_features(self, name, limit=3):
+        """Feature column names of `name` that carry data, shuffled, capped."""
+        items = self.find_entity(name)
+        if not items:
+            return []
+        meta_keys = {"Name", "Name_alt", "Name_eng", "Name_sci", "Typ",
+                     "Gruppe", "Links", "Klasse", "Unterklasse"}
+        filled = []
+        for f in items:
+            for k, v in f.items():
+                if v and k not in meta_keys and k not in filled:
+                    filled.append(k)
+        random.shuffle(filled)
+        return filled[:limit]
 
     def handle_messdaten(self, input=None, context=None, lang="de"):
         """
@@ -454,7 +514,14 @@ class BotAction:
         searchImage = False
         searchAudio = False
 
-        if "habitat" in key.lower():
+        # Metis stage-2 categories (add-metis-decision-routing): the
+        # feature key is a whole column group; verhalten prefers audio,
+        # the others an image.
+        if key.lower() in CATEGORIES and self.category_map:
+            searchKeys_ = self.category_map[key.lower()]["columns"]
+            searchImage = True
+            searchAudio = key.lower() == "verhalten"
+        elif "habitat" in key.lower():
             searchKeys_ = ["Lebensraum", "Habitat"]
         elif "definition" in key.lower():
             # everything
@@ -489,11 +556,16 @@ class BotAction:
         else:
             searchKeys_ = key.split("tp_")[-1]
 
-        # make sure we have leading capital letters
+        # make sure we have leading capital letters; keys that already
+        # match an entity column (e.g. multi-word "Ökologische Bedeutung"
+        # from the category map) keep their exact casing
+        known_keys = set(self.data[0].keys()) if self.data else set()
         if isinstance(searchKeys_, str):
-            searchKeys = [searchKeys_[0].upper() + searchKeys_[1:].lower()]
+            searchKeys = [searchKeys_ if searchKeys_ in known_keys
+                          else searchKeys_[0].upper() + searchKeys_[1:].lower()]
         else:
-            searchKeys = [a[0].upper() + a[1:].lower() for a in searchKeys_]
+            searchKeys = [a if a in known_keys else a[0].upper() + a[1:].lower()
+                          for a in searchKeys_]
 
         if self.DEBUG:
             print(f"Getting features for entity '{name}' with key '{key}' mapped to search keys '{searchKeys}'")
