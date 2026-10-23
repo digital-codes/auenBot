@@ -45,5 +45,8 @@
 - [x] 4.2 Legacy path check: with `METIS_ROUTING=False`, existing behaviour
       unchanged (decoder used, bio feature flow unchanged) — boot check:
       no bio_frage record appended, decoder with 3687 vectors loaded
-- [ ] 4.3 Run `botApiTest.py` happy path against the flag-off server
-      (deferred: needs the live service; owner will test)
+- [x] 4.3 Run `botApiTest.py` happy path against the flag-off server
+      — run against the Metis-on server instead: all 11 scenarios +
+      16 entity samples PASS (commit includes three routing fixes found
+      by the suite: focus-anchoring re-probe, unsure→options path,
+      unrelated ordered after concrete intents)

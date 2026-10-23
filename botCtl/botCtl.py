@@ -542,18 +542,45 @@ def route_handler():
         name = res["intent"]
         p_name = res["probs"].get(name, 0.0)
 
+        # Focus-anchoring guard: with a focus in the state, Metis reads
+        # otherwise unrelated inputs as bio questions about the focused
+        # entity ("gibt es was zu essen" + focus Reh -> bio_frage 0.83).
+        # The focus may only steer a bio question the followup answer
+        # confirms; otherwise re-probe the input without the focus.
+        if name == "bio_frage" and focus.get("entity") and res["followup"] < FOLLOWUP:
+            res = metis_router.detect(user_input)
+            name = res["intent"]
+            p_name = res["probs"].get(name, 0.0)
+            if DEBUG:
+                print("Metis stage 1 (focus-free probe):", name, f"p={p_name:.2f}")
+
         # 1. Social intents win first: smalltalk is "unrelated" to the
         #    center too, so the unrelated route must not shadow it.
         if name in SOCIAL_INTENTS and p_name > P_SOCIAL:
             return INTENT_ROUTING[name], None, True
-        # 2. Unrelated input routes to the fallback intent.
+        # 2. Undecided decode: a low-confidence answer offers intent
+        #    options like the legacy embedding decoder's unsure path.
+        #    A bio question stays in the bio flow even when unsure -
+        #    bare entity names ("rheinaue") decode weakly but the entity
+        #    search resolves them (offering entity options on group hits).
         fallback = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")["intent"]
+        if name != "bio_frage" and p_name < P_SOCIAL:
+            candidates = [
+                {"title": INTENT_ROUTING[k]}
+                for k, v in sorted(res["probs"].items(), key=lambda kv: -kv[1])
+                if k not in ("fallback", "bio_frage") and INTENT_ROUTING.get(k)
+            ][:3]
+            if candidates:
+                return None, candidates, True
+            return fallback, None, True
+        # 3. Concrete non-bio intents route to their existing machinery
+        #    before the unrelated check (wetter/messdaten beat "unrelated").
+        if name not in ("bio_frage", "fallback"):
+            return INTENT_ROUTING.get(name, fallback), None, True
+        # 4. Unrelated input routes to the fallback intent.
         if res["unrelated"] >= UNRELATED or name == "fallback":
             return fallback, None, True
-        # 3. Any non-bio intent routes to its existing machinery.
-        if name != "bio_frage":
-            return INTENT_ROUTING.get(name, fallback), None, True
-        # 4. Follow-up: reuse the focused entity, skip the entity search.
+        # 5. Follow-up: reuse the focused entity, skip the entity search.
         if res["followup"] >= FOLLOWUP and focus.get("entity"):
             cat = metis_router.category(user_input, focus["entity"])
             if DEBUG:
@@ -562,7 +589,7 @@ def route_handler():
             ctx["type"] = focus.get("type")
             ctx["feature"] = "" if cat["tie"] else cat["category"]
             return "bio_frage", None, True
-        # 5. Fresh bio question: a clear new topic starts without focus.
+        # 6. Fresh bio question: a clear new topic starts without focus.
         if res["new_topic"] >= NEW_TOPIC:
             ctx.pop("focus", None)
         return "bio_frage", None, True

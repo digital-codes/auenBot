@@ -38,14 +38,21 @@ Spike artifacts: `/tmp/opencode/metis_spike/` (`intents_simple.json`,
   one `choice` question (17 intents, German criteria descriptions from the
   spike) plus noul `followup`, `new_topic`, `unrelated`. State carries the
   user input, the focus entity name/type, and whether the previous question
-  was answered. Routing order (spike-validated):
+  was answered. Routing order (API-test-validated):
   1. `smalltalk`/`beleidigung` p>0.5 → friendly path, focus cleared
-  2. `unrelated` ≥ 0.8 → fallback
+  2. non-bio intent p<0.5 → intent options (legacy unsure path); a bio
+     question stays in the bio flow even below 0.5 (bare entity names
+     decode weakly but the entity search resolves them)
   3. other named intent → existing machinery for that intent
-  4. `followup` ≥ 0.7 and focus present → reuse focus entity, skip entity search
-  5. otherwise → clear focus if `new_topic` ≥ 0.7, run entity search
-  Alternative considered: followup as its own intent — rejected; noul decided
-  jointly is cleaner and matches the existing gate semantics.
+  4. `unrelated` ≥ 0.8 → fallback
+  5. `followup` ≥ 0.7 and focus present → reuse focus entity, skip entity search
+  6. otherwise → clear focus if `new_topic` ≥ 0.7, run entity search
+  Focus anchoring guard: with a focus in the state Metis reads unrelated
+  inputs as bio questions about the focused entity ("gibt es was zu essen"
+  + focus Reh → bio_frage 0.83). A bio choice with followup below the
+  threshold is therefore re-probed without the focus before routing.
+  Alternative considered: followup as its own intent — rejected; noul
+  decided jointly is cleaner and matches the existing gate semantics.
 - **D3 — Stage 2 decides the feature category.** One `choice` question
   (verhalten/eigenschaften/beschreibung) over the resolved entity. Column
   mapping comes from `data/category_map.json`. Undecided = top-2 margin
