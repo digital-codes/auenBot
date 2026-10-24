@@ -18,6 +18,44 @@ All runtime parts live in **botCtl** (Flask app, port 11354). Deployment steps:
 Runtime state: `botCtl/bot_history.db` (SQLite message log, auto-created).
 
 
+# State Token Security
+
+The conversation context (intent, entity, feature, focus, options) is **not**
+stored server-side. It is sealed into an opaque token the client carries
+between requests (`botCtl/botQa.py`):
+
+```
+token = "v1." + base64url( nonce(12) || ciphertext )
+
+key   = HMAC-SHA256(STATE_TOKEN_SECRET, session_id)   # AES-256 key per session
+aad   = session_id                                    # bound as associated data
+ct    = AES-256-GCM(key, nonce, json(ctx), aad)       # auth tag included
+```
+
+Four protection layers:
+
+1. **Confidentiality** - the client cannot read the context (AES-256-GCM).
+2. **Integrity** - the GCM auth tag: any modified bit in the token fails
+   decryption with `InvalidTag`; tampering is infeasible without the secret.
+3. **Session binding** - the key is derived per session *and* the session id
+   is bound as AAD, so session A's token is doubly useless in session B.
+4. **Server secret** - `STATE_TOKEN_SECRET` (see Deploy). Never set it from
+   client input. Without it a random per-process secret is used and tokens
+   do not survive a restart (warning printed at startup).
+
+Rejection policy: a missing, tampered, malformed, or foreign-session token
+answers **HTTP 400** - there is no plaintext fallback
+(`state-token-encryption` spec in `botCtl/openspec/specs/`).
+
+The API test suite verifies these properties:
+`botApiTest.py --scenario tampered` flips one character in a valid token and
+expects 400; `--scenario foreign` sends session A's token under session B
+(expects 400); `--scenario restart_resume` proves that with the *same*
+`STATE_TOKEN_SECRET` a session resumes after a restart, while
+`--scenario restart_no_secret` proves that without a secret it does not
+(400 on the stale token).
+
+
 # Status
 
 ## Metis routing (2026-10-24, branch `metis-decision-routing`)
