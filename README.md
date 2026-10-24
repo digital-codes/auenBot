@@ -2,6 +2,22 @@
 Migration from LUBW/NAZKA ChatBot KarlA
 
 
+# Deploy
+
+All runtime parts live in **botCtl** (Flask app, port 11354). Deployment steps:
+
+1. **Checkout with git lfs** - `rawData/intent_vectors.json` (~119 MB embeddings) and other media files are LFS-tracked. A plain clone leaves pointer files behind and the legacy decoder cannot load.
+2. **Python dependencies** - flask, jsonschema, sqlalchemy, numpy, requests, rapidfuzz (or fuzzywuzzy), pandas (only for `makeDataFiles.py`), cryptography.
+3. **Config: `botCtl/private.py`** (not in the repo) - LLM/embedding access (`apiKey`, `baseUrl`, `embUrl`, `embMdl`, `lngMdl`) and, for Metis routing, `METIS_KEY`, `METIS_URL` (default `https://api.greenpt.ai/v1/systemone`), `METIS_MDL` (`metis`) plus the optional `METIS_ROUTING` switch (default: on when `METIS_KEY` exists; `False` runs the legacy decoder only).
+4. **Secret: environment variable `STATE_TOKEN_SECRET`** (hex, e.g. `openssl rand -hex 16`) - seals the conversation state tokens. When unset, a random secret is used per process and state tokens do **not** survive a restart. Set it before starting the service (systemd unit, wrapper script or shell profile).
+5. **Generate data files**: run `python3 botCtl/makeDataFiles.py` once after checkout or whenever `rawData/` changes. It derives `botCtl/data/` files (`intents_raw.json`, `entity_*.json`, `feature_*.json`, `entity_bio.json`). The `options_*.json` files in `botCtl/data/` are hand-maintained and are never overwritten. `data/intents_metis.json` and `data/category_map.json` are hand-maintained Metis criteria (source files, not generated).
+6. **Start**: `python3 botCtl/botCtl.py` runs the Flask app on `0.0.0.0:11354` (development mode; behind gunicorn/uwsgi for production). Optional: a `botCtl/startModels.sh` is executed in the background on the first request of a fresh session, if present (log: `botCtl/startModels.log`).
+7. **Reverse proxy** - external exposure is via Apache proxy settings pointing at port 11354.
+8. **Verify** - `python3 botCtl/metis_test.py` (needs `METIS_KEY`, hits the live endpoint) and `python3 botApiTest.py --scenario all` (spawns its own service child with a generated secret).
+
+Runtime state: `botCtl/bot_history.db` (SQLite message log, auto-created).
+
+
 # Status
 
 ## Metis routing (2026-10-24, branch `metis-decision-routing`)
