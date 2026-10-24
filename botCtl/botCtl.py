@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from multiprocessing import context
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict
 
@@ -35,6 +35,8 @@ import signal
 import sys
 import os
 import re
+import time
+import threading
 
 from sympy import sequence
 
@@ -256,6 +258,73 @@ def sanitize_message_text(message: Dict[str, Any]) -> None:
     if _CONTROL_CHARS_RE.search(text):
         abort(make_response(jsonify(error="invalid request"), 400))
 
+# Session identifiers must be short token strings (UUIDs from the server
+# or short client ids). Bounds what reaches the history DB and logs.
+_SESSION_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+# Per-session turn rate limit (security analysis H1): each turn spends
+# external LLM/Metis credits, so unthrottled input can drain the account
+# quota. 0 disables the limiter.
+TURN_RATE_LIMIT = int(os.environ.get("TURN_RATE_LIMIT", "30"))
+TURN_RATE_WINDOW = 60.0  # seconds
+_rate_lock = threading.Lock()
+_rate_hits: Dict[str, list] = {}
+
+
+def _rate_limit_ok(session_id: str) -> bool:
+    """Sliding-window limiter: max TURN_RATE_LIMIT turns per session per minute."""
+    if TURN_RATE_LIMIT <= 0:
+        return True
+    now = time.monotonic()
+    with _rate_lock:
+        hits = [t for t in _rate_hits.get(session_id, []) if now - t < TURN_RATE_WINDOW]
+        if len(hits) >= TURN_RATE_LIMIT:
+            _rate_hits[session_id] = hits
+            return False
+        hits.append(now)
+        _rate_hits[session_id] = hits
+        if len(_rate_hits) > 10000:  # opportunistic cleanup of idle sessions
+            stale = [k for k, v in _rate_hits.items() if not v or now - v[-1] > 3600]
+            for k in stale:
+                _rate_hits.pop(k, None)
+        return True
+
+
+# History retention (security analysis M2): user messages are personal
+# data; rows older than the retention period are purged at startup and
+# once a day. 0 disables purging.
+HISTORY_RETENTION_DAYS = int(os.environ.get("HISTORY_RETENTION_DAYS", "90"))
+
+
+def purge_history() -> None:
+    if HISTORY_RETENTION_DAYS <= 0:
+        return
+    cutoff = datetime.now(timezone.utc) - timedelta(days=HISTORY_RETENTION_DAYS)
+    try:
+        with SessionLocal() as db:
+            deleted = (
+                db.query(HistoryRecord)
+                .filter(HistoryRecord.received_at < cutoff)
+                .delete(synchronize_session=False)
+            )
+            db.commit()
+        if deleted:
+            print(f"History retention: removed {deleted} rows older than {HISTORY_RETENTION_DAYS} days.")
+    except Exception as e:
+        print(f"History retention failed: {e}")
+
+
+def _retention_loop() -> None:
+    while True:
+        time.sleep(24 * 3600)
+        purge_history()
+
+
+# History retention (security analysis M2): purge old rows at startup,
+# then once a day in a daemon thread.
+purge_history()
+threading.Thread(target=_retention_loop, daemon=True).start()
+
 
 def check_input(validated: Dict[str, Any]) -> Dict[str, Any]:
     if DEBUG: print("Check input on: ",validated)
@@ -454,12 +523,23 @@ def route_handler():
         # 400 Bad Request – error in processing
         return jsonify(error="Error processing input"), 400
 
+    session = result["session"]
+
+    # Session format guard (security analysis L1): short token strings only.
+    if not _SESSION_RE.match(session):
+        return jsonify(error="invalid session"), 400
+
+    # Per-session rate limit (security analysis H1): each turn spends
+    # external LLM/Metis credits.
+    if not _rate_limit_ok(session):
+        return jsonify(error="rate limit exceeded"), 429
+
     # store received message
     store_history(
         status=result.get("status", "ok"),
         message=result.get("message", {}),
         type="RX",
-        session=result["session"],
+        session=session,
         sequence=result["sequence"],
         lang=result.get("lang","de"),
         ctx=result.get("context", {}),
@@ -470,7 +550,6 @@ def route_handler():
     user_input = message.get("text", "")
     if DEBUG: print("User input:", user_input)
 
-    session = result["session"]
     sequence = result["sequence"]
     lang = result.get("lang","de")
 
@@ -893,7 +972,10 @@ if __name__ == "__main__":
         DEBUG = False
         print("Running in normal mode.")
 
+    # Security analysis H2: never run the Werkzeug debugger/reloader.
+    # `-d` only enables verbose logging. Production runs behind a WSGI
+    # server (gunicorn) - see README Deploy.
     try:
-        app.run(host="0.0.0.0", port=11354, debug=DEBUG)
+        app.run(host="0.0.0.0", port=11354, debug=False, use_reloader=False)
     except KeyboardInterrupt:
         _graceful_shutdown()

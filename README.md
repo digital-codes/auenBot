@@ -17,6 +17,49 @@ All runtime parts live in **botCtl** (Flask app, port 11354). Deployment steps:
 
 Runtime state: `botCtl/bot_history.db` (SQLite message log, auto-created).
 
+### Hardening (security analysis 2026-10-24)
+
+Built into the service:
+
+  * **Turn rate limit** - max 30 turns per session per minute (env
+    `TURN_RATE_LIMIT`, 0 = off), HTTP 429 above. Each turn spends external
+    LLM/Metis credits, so unthrottled input can drain the account quota.
+    Complement with Apache-side throttling (`mod_evasive` /
+    `mod_security`) and a `LimitRequestBody`.
+  * **Session format guard** - `session` must match `^[A-Za-z0-9_-]{1,64}$`
+    (UUIDs as issued by the server qualify); anything else is a 400.
+  * **State token expiry** - tokens carry a sealed issuance timestamp and
+    expire after 7 days (env `STATE_TOKEN_MAX_AGE` seconds, 0 = off).
+    Tokens without a timestamp (pre-feature) remain valid.
+  * **History retention** - `bot_history.db` rows older than 90 days are
+    purged at startup and once a day (env `HISTORY_RETENTION_DAYS`, 0 = off).
+  * **No Werkzeug debugger** - `botCtl.py -d` only enables verbose logging;
+    the Flask dev server always runs with `debug=False, use_reloader=False`.
+    For production prefer gunicorn:
+    `gunicorn -w 2 -b 127.0.0.1:11354 botCtl:app` (bind localhost only,
+    TLS at the proxy), or keep `botCtl.py` with the port firewalled off.
+  * **External calls bounded** - the lupo-cloud measurement fetch uses a
+    10s timeout and answers "unavailable" on failure; LQI values outside
+    1..6 are treated as missing data.
+
+Data protection (DSGVO) notes:
+
+  * `bot_history.db` stores user message texts and the full conversation
+    context in plaintext, plus session ids. It lives next to the code with
+    OS-level access control only - restrict file permissions accordingly.
+  * User input is sent to third-party services: the embedding/chat LLM
+    (entity arbiter, follow-up gate on the legacy path) and GreenPT Metis
+    (routing, EU endpoint). This must be covered by the privacy notice of
+    the site and a data processing agreement per provider.
+  * `botCtl/private.py` holds API keys - keep it mode 600 and out of backups
+    that are not encrypted.
+
+Forward-looking: the frontend renders HTML from bot utterances (e.g. `<br/>`).
+Today every string that reaches an answer comes from curated data or server
+generated options. **When the planned LLM-formulated answers land, their
+output MUST be escaped or HTML-whitelisted before rendering**, or prompt
+injection becomes stored XSS.
+
 
 # State Token Security
 

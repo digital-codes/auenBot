@@ -28,6 +28,7 @@ import hashlib
 import hmac
 import json
 import os
+import time
 from typing import Any, Dict, Optional, Tuple
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -44,6 +45,13 @@ if os.environ.get("STATE_TOKEN_SECRET") is None:
     SERVER_SECRET: Optional[bytes] = os.urandom(32)  # 32+ bytes recommended
 else:
     SERVER_SECRET = os.environ["STATE_TOKEN_SECRET"].encode("utf-8")
+
+# Token expiry (security analysis L2): stateless tokens otherwise live
+# forever once leaked. A timestamp is sealed into every token and checked
+# on open. Configure with STATE_TOKEN_MAX_AGE (seconds); 0 disables
+# expiry. Tokens sealed before this feature have no timestamp and are
+# accepted for compatibility.
+STATE_TOKEN_MAX_AGE = int(os.environ.get("STATE_TOKEN_MAX_AGE", str(7 * 24 * 3600)))
 
 
 def _derive_key(session_id: str, secret: bytes) -> bytes:
@@ -66,7 +74,11 @@ def seal_state(state: Dict[str, Any], session_id: str, *, secret: Optional[bytes
     aesgcm = AESGCM(key)
 
     nonce = os.urandom(12)
-    plaintext = json.dumps(state, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    # Seal an issuance timestamp on a copy: the caller's working context
+    # must not gain a stray key, open_state pops it again.
+    payload = dict(state)
+    payload["_ts"] = int(time.time())
+    plaintext = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
     # bind token to session_id as associated data (extra safety)
     aad = session_id.encode("utf-8")
@@ -98,7 +110,15 @@ def open_state(token: str, session_id: str, *, secret: Optional[bytes] = None) -
 
     aad = session_id.encode("utf-8")
     plaintext = aesgcm.decrypt(nonce, ciphertext, aad)  # raises if tampered/wrong session
-    return json.loads(plaintext.decode("utf-8"))
+    data = json.loads(plaintext.decode("utf-8"))
+
+    # Expiry check (security analysis L2): strip the sealed timestamp
+    # before returning; old tokens without one stay valid.
+    ts = data.pop("_ts", None)
+    if ts is not None and STATE_TOKEN_MAX_AGE > 0:
+        if not isinstance(ts, int) or int(time.time()) - ts > STATE_TOKEN_MAX_AGE:
+            raise ValueError("State token expired")
+    return data
 
 
 # ---- Per-event sealing (kept for internal reuse, e.g. by QaEngine) ----

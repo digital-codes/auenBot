@@ -305,7 +305,13 @@ class BotAction:
             return False,{"text": bot_utters[lang]["measurement_prompt"]}
 
         url += "?from=2d-ago&labels=station:DEBW081"
-        json_data = requests.get(url).json()
+        # Security analysis M1: bounded call - a hanging external API
+        # must not block the (synchronous) Flask worker.
+        try:
+            json_data = requests.get(url, timeout=10).json()
+        except Exception as e:
+            if debug: print("Measurement fetch failed:", e)
+            return False, {"text": bot_utters[lang]["measurement_unavail"]}
         if len(json_data[0]["values"]) == 0:
             return False,{"text": bot_utters[lang]["measurement_unavail"]}
 
@@ -323,6 +329,12 @@ class BotAction:
             if success:
                 if messwert == "LQI":
                     unit = "."
+                    # Security analysis L4: the value comes from the
+                    # external API - a range outside 1..6 must not
+                    # raise IndexError but answer "unavailable".
+                    if not 1 <= value <= len(lqi[lang]):
+                        success = False
+                        continue
                     message = messwert_label + time[lang] + " " + lqi[lang][value-1] + "."
                     extension = bot_measures["measurement_eval"][lang]["LQI"]
                     output = {"text": message + extension.get("text",""), "link": extension.get("link", None)}
