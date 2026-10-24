@@ -1,14 +1,14 @@
 """
-metis_test.py - smoke test for Metis routing (add-metis-decision-routing).
+sysone_test.py - smoke test for SystemOne routing.
 
 Runs the stage-1 router and the stage-2 category decision against the live
 endpoint and checks the local category answer building. Run from botCtl/:
 
-    python3 metis_test.py
+    python3 sysone_test.py
 """
 import json
 
-from botMetis import MetisRouter, INTENT_ROUTING
+from botSystemone import SystemoneRouter, INTENT_ROUTING
 from botActions import BotAction
 
 PASS = 0
@@ -25,12 +25,12 @@ def check(name, cond, detail=""):
         print(f"  FAIL  {name}  {detail}")
 
 
-router = MetisRouter()
+router = SystemoneRouter()
 router.setDebug(False)
-print(f"Metis routing enabled: {router.enabled()}")
+print(f"SystemOne routing enabled: {router.enabled()}")
 
 if not router.enabled():
-    raise SystemExit("Metis not enabled (missing METIS_KEY or data files)")
+    raise SystemExit("SystemOne not enabled (missing SYSONE_KEY/SYSONE_URL or data files)")
 
 # ------------------------------------------------------------------ stage 1
 print("\n--- Stage 1 (intent + transitions) ---")
@@ -85,8 +85,8 @@ for label, query, entity, want_cat in [
 # ------------------------------------------------- local answer building
 print("\n--- Answer building (no endpoint) ---")
 action = BotAction("../rawData/tiere_pflanzen_auen.json")
-action.metis = MetisRouter()
-action.metis._enabled = False  # force the plain category path
+action.sysone = SystemoneRouter()
+action.sysone._enabled = False  # force the plain category path
 action.setDebug(False)
 
 feat = action.get_entity_features("Eisvogel", "verhalten")
@@ -106,8 +106,8 @@ filled = action._filled_features("Eisvogel", limit=3)
 check("filled_features", 0 < len(filled) <= 3, str(filled))
 
 # ------------------------------------------------- full bio_feature action
-print("\n--- handle_bio_feature (with Metis) ---")
-action.metis = router
+print("\n--- handle_bio_feature (with SystemOne) ---")
+action.sysone = router
 ok, out = action.handle_bio_feature(input="Was frisst der Eisvogel?",
                                     context={"entity": "Eisvogel", "feature": ""})
 check("bio_action_verhalten", ok and isinstance(out.get("text"), list) and len(out["text"]) > 0,
@@ -115,12 +115,12 @@ check("bio_action_verhalten", ok and isinstance(out.get("text"), list) and len(o
 check("bio_action_audio", len(out.get("audio", [])) > 0, str(out.get("audio"))[:80])
 
 # tie path: force tie by lowering thresholds on a copy
-import botMetis
-old_margin, old_conf = botMetis.TIE_MARGIN, botMetis.TIE_CONFIDENCE
-botMetis.TIE_MARGIN, botMetis.TIE_CONFIDENCE = 1.0, 1.0
+import botSystemone
+old_margin, old_conf = botSystemone.TIE_MARGIN, botSystemone.TIE_CONFIDENCE
+botSystemone.TIE_MARGIN, botSystemone.TIE_CONFIDENCE = 1.0, 1.0
 ok, out = action.handle_bio_feature(input="Was gibt es über die Gelbbauchunke?",
                                     context={"entity": "Gelbbauchunke", "feature": ""})
-botMetis.TIE_MARGIN, botMetis.TIE_CONFIDENCE = old_margin, old_conf
+botSystemone.TIE_MARGIN, botSystemone.TIE_CONFIDENCE = old_margin, old_conf
 check("bio_action_tie_overview", ok and any("interessiert dich" in t for t in out.get("text", [])),
       str(out.get("text"))[:100])
 check("bio_action_tie_options", len(out.get("options", [])) >= 2, str(out.get("options")))

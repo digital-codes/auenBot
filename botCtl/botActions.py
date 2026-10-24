@@ -11,7 +11,7 @@ except ImportError:
     from fuzzywuzzy import process, fuzz, utils
     matchProcessor = utils.full_process
 
-from botMetis import MetisRouter, CATEGORIES
+from botSystemone import SystemoneRouter, CATEGORIES
 
 
 
@@ -99,7 +99,7 @@ class BotAction:
         self.DEBUG = True
         self.matchThreshold = 75
 
-        # Metis category map (add-metis-decision-routing): column groups
+        # SystemOne category map (botSystemone.py): column groups
         # for the stage-2 categories; optional file, legacy flow continues
         # without it.
         self.category_map = {}
@@ -109,11 +109,11 @@ class BotAction:
                 self.category_map = json.load(f)
         except Exception as e:
             if self.DEBUG:
-                print("Category map not loaded (Metis categories unavailable):", e)
+                print("Category map not loaded (SystemOne categories unavailable):", e)
 
-        # Metis router for the stage-2 category decision; created lazily
+        # SystemOne router for the stage-2 category decision; created lazily
         # here (not injected) so BotAction stays standalone-testable.
-        self.metis = MetisRouter()
+        self.sysone = SystemoneRouter()
 
 
     def execute(self, handler_name, input=None, context=None, lang="de"):
@@ -180,8 +180,8 @@ class BotAction:
         Handler for 'bio_feature' action.
         Expects parameters like: {'entity': 'entity_name', 'feature': 'feature_key'}
 
-        With Metis routing enabled an empty feature (or one that already is
-        a stage-2 category) is decided by the Metis category request; an
+        With SystemOne routing enabled an empty feature (or one that already is
+        a stage-2 category) is decided by the SystemOne category request; an
         undecided answer merges all categories and offers feature options.
         """
         if self.DEBUG:
@@ -190,23 +190,23 @@ class BotAction:
         entity_name = context.get("entity", "") if context else ""
         feature_key = context.get("feature", "") if context else ""
 
-        if not entity_name or (not feature_key and not self.metis.enabled()):
+        if not entity_name or (not feature_key and not self.sysone.enabled()):
             return False, {"error": "Missing entity or feature parameter"}
 
         tie = False
-        if self.metis.enabled() and (
+        if self.sysone.enabled() and (
             not feature_key or feature_key.lower() in CATEGORIES
         ):
-            cat = self.metis.category(input or "", entity_name)
+            cat = self.sysone.category(input or "", entity_name)
             if self.DEBUG:
-                print(f"Metis stage 2: category '{cat['category']}' tie={cat['tie']} conf={cat['confidence']}")
+                print(f"SystemOne stage 2: category '{cat['category']}' tie={cat['tie']} conf={cat['confidence']}")
             tie = cat["tie"]
             feature_key = "definition" if tie else cat["category"]
 
         features = self.get_entity_features(entity_name, feature_key)
         if features:
             if tie:
-                # Undecided (metis-routing spec): compact overview of all
+                # Undecided (systemone-routing spec): compact overview of all
                 # categories plus 2-3 options drawn from the entity's
                 # actually filled feature columns. `feature_pick` keeps
                 # the completion flow pending so the pick sets the feature.
@@ -526,7 +526,7 @@ class BotAction:
         searchImage = False
         searchAudio = False
 
-        # Metis stage-2 categories (add-metis-decision-routing): the
+        # SystemOne stage-2 categories (botSystemone.py): the
         # feature key is a whole column group; verhalten prefers audio,
         # the others an image.
         if key.lower() in CATEGORIES and self.category_map:

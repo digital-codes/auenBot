@@ -1,13 +1,13 @@
 """
-botMetis.py - Metis decision-model routing (add-metis-decision-routing).
+botSystemone.py - SystemOne decision-model routing.
 
 Stage 1 decides the coarse intent (17-option choice) jointly with three
 yes/no transition questions (followup, new_topic, unrelated) in one request.
 Stage 2 decides the bio feature category (verhalten/eigenschaften/beschreibung).
 No text is generated; the endpoint returns probabilities only.
 
-Disabled or failing Metis routing lets the caller fall back to the legacy
-embedding decoder (design D1/D8 of the change).
+Disabled or failing SystemOne routing lets the caller fall back to the legacy
+embedding decoder (design D1/D8 of the original change).
 """
 import json
 import os
@@ -15,7 +15,7 @@ import os
 import requests
 
 # Routing thresholds, spike-validated (batch over 882 real example
-# questions, iterations 1-4 in /tmp/opencode/metis_spike/).
+# questions, iterations 1-4).
 P_SOCIAL = 0.5        # min probability for smalltalk/beleidigung to win
 UNRELATED = 0.8       # noul threshold for the fallback route
 FOLLOWUP = 0.7        # noul threshold to reuse the focus entity
@@ -49,21 +49,33 @@ SOCIAL_INTENTS = ("smalltalk", "beleidigung")
 CATEGORIES = ("verhalten", "eigenschaften", "beschreibung")
 
 
+_warned_legacy = False
+
+
 def load_private():
-    """Read the METIS_* config from private.py (optional file)."""
+    """Read the SYSONE_* config from private.py (optional file)."""
+    global _warned_legacy
     try:
         import private as pr  # type: ignore
     except Exception:
         return None
-    return {
-        "key": getattr(pr, "METIS_KEY", None),
-        "url": getattr(pr, "METIS_URL", "https://api.greenpt.ai/v1/systemone"),
-        "model": getattr(pr, "METIS_MDL", "metis"),
-        "enabled": getattr(pr, "METIS_ROUTING", None),
+    cfg = {
+        "key": getattr(pr, "SYSONE_KEY", None),
+        "url": getattr(pr, "SYSONE_URL", None),
+        "model": getattr(pr, "SYSONE_MDL", None),
+        "enabled": getattr(pr, "SYSONE_ROUTING", None),
     }
+    if not any(cfg.values()) and not _warned_legacy:
+        legacy = [name for name in ("METIS_KEY", "METIS_URL", "METIS_MDL", "METIS_ROUTING")
+                  if getattr(pr, name, None) is not None]
+        if legacy:
+            print("private.py uses legacy %s keys; SystemOne routing disabled. "
+                  "Rename them to SYSONE_KEY/SYSONE_URL/SYSONE_MDL/SYSONE_ROUTING." % "/".join(legacy))
+            _warned_legacy = True
+    return cfg
 
 
-class MetisRouter:
+class SystemoneRouter:
     """Thin client for POST /v1/systemone with the two routing stages."""
 
     def __init__(self, config=None, data_dir=None):
@@ -72,21 +84,23 @@ class MetisRouter:
         self.url = (cfg.get("url") if cfg else None) or "https://api.greenpt.ai/v1/systemone"
         self.model = (cfg.get("model") if cfg else None) or "metis"
         flag = cfg.get("enabled") if cfg else None
-        # Default on when a key is present; METIS_ROUTING=false overrides.
-        self._enabled = bool(self.key) if flag is None else bool(flag) and bool(self.key)
+        # Default on when a key is present or a non-default URL is configured
+        # (e.g. local Ollama, no key); SYSONE_ROUTING=false always disables.
+        usable = bool(self.key) or self.url != "https://api.greenpt.ai/v1/systemone"
+        self._enabled = usable if flag is None else bool(flag) and usable
         self.DEBUG = False
 
         data_dir = data_dir or os.path.join(os.path.dirname(__file__), "data")
         self.criteria = {}
         self.categories = {}
         try:
-            with open(os.path.join(data_dir, "intents_metis.json"), encoding="utf-8") as f:
+            with open(os.path.join(data_dir, "intents_sysone.json"), encoding="utf-8") as f:
                 self.criteria = json.load(f).get("criteria", {})
             with open(os.path.join(data_dir, "category_map.json"), encoding="utf-8") as f:
                 self.categories = json.load(f)
         except Exception as e:
             if self.DEBUG:
-                print("MetisRouter: data files not loaded:", e)
+                print("SystemoneRouter: data files not loaded:", e)
 
     def setDebug(self, debug):
         self.DEBUG = debug

@@ -868,7 +868,7 @@ class BotIntent:
             action_result = self._process_action(intent, input_text, ctx, lang)
             output = action_result if action_result else {"text": BotIntent.getMsg("completed", lang)}
 
-            # Metis undecided category (metis-routing spec): the overview
+            # SystemOne undecided category (systemone-routing spec): the overview
             # answered the turn, but feature options are offered; keep the
             # pending-completion marker so the pick lands in this flow and
             # sets the feature (same continuation as the feature fallback).

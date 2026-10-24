@@ -41,7 +41,7 @@ entities whose `Typ` matches the type implied by the request
 (`Tier` for animals, `Pflanze` for plants). It MUST NOT return
 features from entities of a different type, even if those entities
 score above the fuzzy-match threshold.
-With Metis routing enabled, the feature for a bio answer SHALL NOT be the
+With SystemOne routing enabled, the feature for a bio answer SHALL NOT be the
 decoded intent's suffix. Stage 2 decides the category
 (verhalten/eigenschaften/beschreibung); the answer merges all filled columns
 of that category's column group and attaches media from the entity's Links
@@ -49,7 +49,7 @@ of that category's column group and attaches media from the entity's Links
 undecided (top-2 probability margin below 0.10 or confidence below 0.35),
 the answer merges all filled columns of all categories and offers 2-3
 feature options drawn from the entity's actually filled columns. The legacy
-per-intent feature column flow remains in force when Metis routing is
+per-intent feature column flow remains in force when SystemOne routing is
 disabled.
 
 #### Scenario: Above-threshold plant matches are ignored for an animal query

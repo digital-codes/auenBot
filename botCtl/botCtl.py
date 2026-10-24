@@ -45,7 +45,7 @@ DEBUG = True
 from botIntents import BotIntent
 from botLlm import OpenAICompatClient
 from botDecoder import BotDecoder
-from botMetis import MetisRouter, INTENT_ROUTING, SOCIAL_INTENTS, \
+from botSystemone import SystemoneRouter, INTENT_ROUTING, SOCIAL_INTENTS, \
     P_SOCIAL, UNRELATED, FOLLOWUP, NEW_TOPIC
 from botQa import open_state, seal_state
 
@@ -108,16 +108,16 @@ print(f"Loaded intent '{intents.name}' with {len(intents.data)} entries.")
 for i in intents.data[:5]:
     print(i["intent_de"])
 
-# Metis routing (add-metis-decision-routing): the coarse bio_frage record
+# SystemOne routing (botSystemone.py): the coarse bio_frage record
 # is appended to the intent data so intents.execute() finds it; the other
 # coarse intents route onto existing records (see INTENT_ROUTING).
-metis_router = MetisRouter()
-if metis_router.enabled():
-    for rec in json.load(open("./data/intents_metis.json", encoding="utf-8")).get("intents", []):
+sysone_router = SystemoneRouter()
+if sysone_router.enabled():
+    for rec in json.load(open("./data/intents_sysone.json", encoding="utf-8")).get("intents", []):
         intents.data.append(rec)
-    print("Metis routing enabled (stage-1/2 decision model).")
+    print("SystemOne routing enabled (stage-1/2 decision model).")
 else:
-    print("Metis routing disabled, legacy decoder only.")
+    print("SystemOne routing disabled, legacy decoder only.")
 
 # load actions to intents
 intents.setActions(context_path)
@@ -263,7 +263,7 @@ def sanitize_message_text(message: Dict[str, Any]) -> None:
 _SESSION_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 # Per-session turn rate limit (security analysis H1): each turn spends
-# external LLM/Metis credits, so unthrottled input can drain the account
+# external LLM/SystemOne credits, so unthrottled input can drain the account
 # quota. 0 disables the limiter.
 TURN_RATE_LIMIT = int(os.environ.get("TURN_RATE_LIMIT", "30"))
 TURN_RATE_WINDOW = 60.0  # seconds
@@ -530,7 +530,7 @@ def route_handler():
         return jsonify(error="invalid session"), 400
 
     # Per-session rate limit (security analysis H1): each turn spends
-    # external LLM/Metis credits.
+    # external LLM/SystemOne credits.
     if not _rate_limit_ok(session):
         return jsonify(error="rate limit exceeded"), 429
 
@@ -589,12 +589,12 @@ def route_handler():
     # (intent_name_or_None, options_or_None, llm_used); the callers own
     # all context mutation, history storage and responses.
     def _decode_new_intent():
-        if metis_router.enabled():
+        if sysone_router.enabled():
             try:
-                return _decode_new_intent_metis()
+                return _decode_new_intent_sysone()
             except Exception as e:
                 if DEBUG:
-                    print("Metis routing failed, legacy decoder fallback:", e)
+                    print("SystemOne routing failed, legacy decoder fallback:", e)
         detection, llmUsed = decoder.detectIntent(user_input)
         if isinstance(detection, str):
             return detection, None, llmUsed
@@ -603,35 +603,35 @@ def route_handler():
         fallback = intents.get_intent_by_id("63b6a1f6d9d1941218c5c7d2")
         return fallback["intent"], None, llmUsed
 
-    def _decode_new_intent_metis():
-        """Metis stage 1 + routing order (metis-routing spec, design D2).
+    def _decode_new_intent_sysone():
+        """SystemOne stage 1 + routing order (systemone-routing spec, design D2 of the original change).
 
         Mutates ctx for the followup/new_topic transitions (focus reuse
         and focus clear); the callers own all other context handling.
         """
         focus = ctx.get("focus") if isinstance(ctx.get("focus"), dict) else {}
-        res = metis_router.detect(
+        res = sysone_router.detect(
             user_input,
             focus_entity=focus.get("entity"),
             focus_type=focus.get("type"),
             prev_answered=bool(ctx.get("last_intent")),
         )
         if DEBUG:
-            print("Metis stage 1:", {k: v for k, v in res.items() if k != "probs"})
+            print("SystemOne stage 1:", {k: v for k, v in res.items() if k != "probs"})
         name = res["intent"]
         p_name = res["probs"].get(name, 0.0)
 
-        # Focus-anchoring guard: with a focus in the state, Metis reads
+        # Focus-anchoring guard: with a focus in the state, SystemOne reads
         # otherwise unrelated inputs as bio questions about the focused
         # entity ("gibt es was zu essen" + focus Reh -> bio_frage 0.83).
         # The focus may only steer a bio question the followup answer
         # confirms; otherwise re-probe the input without the focus.
         if name == "bio_frage" and focus.get("entity") and res["followup"] < FOLLOWUP:
-            res = metis_router.detect(user_input)
+            res = sysone_router.detect(user_input)
             name = res["intent"]
             p_name = res["probs"].get(name, 0.0)
             if DEBUG:
-                print("Metis stage 1 (focus-free probe):", name, f"p={p_name:.2f}")
+                print("SystemOne stage 1 (focus-free probe):", name, f"p={p_name:.2f}")
 
         # 1. Social intents win first: smalltalk is "unrelated" to the
         #    center too, so the unrelated route must not shadow it.
@@ -661,9 +661,9 @@ def route_handler():
             return fallback, None, True
         # 5. Follow-up: reuse the focused entity, skip the entity search.
         if res["followup"] >= FOLLOWUP and focus.get("entity"):
-            cat = metis_router.category(user_input, focus["entity"])
+            cat = sysone_router.category(user_input, focus["entity"])
             if DEBUG:
-                print("Metis stage 2 (focus):", cat["category"], "tie:", cat["tie"])
+                print("SystemOne stage 2 (focus):", cat["category"], "tie:", cat["tie"])
             ctx["entity"] = focus["entity"]
             ctx["type"] = focus.get("type")
             ctx["feature"] = "" if cat["tie"] else cat["category"]

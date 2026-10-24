@@ -20,7 +20,7 @@
   },
   "intents": [
     {
-      "id": "metis_bio_frage",
+      "id": "sysone_bio_frage",
       "intent": "bio_frage",
       "intent_de": "bio frage",
       "utter": "",

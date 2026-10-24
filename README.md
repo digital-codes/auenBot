@@ -8,12 +8,12 @@ All runtime parts live in **botCtl** (Flask app, port 11354). Deployment steps:
 
 1. **Checkout with git lfs** - `rawData/intent_vectors.json` (~119 MB embeddings) and other media files are LFS-tracked. A plain clone leaves pointer files behind and the legacy decoder cannot load.
 2. **Python dependencies** - flask, jsonschema, sqlalchemy, numpy, requests, rapidfuzz (or fuzzywuzzy), pandas (only for `makeDataFiles.py`), cryptography.
-3. **Config: `botCtl/private.py`** (not in the repo) - LLM/embedding access (`apiKey`, `baseUrl`, `embUrl`, `embMdl`, `lngMdl`) and, for Metis routing, `METIS_KEY`, `METIS_URL` (default `https://api.greenpt.ai/v1/systemone`), `METIS_MDL` (`metis`) plus the optional `METIS_ROUTING` switch (default: on when `METIS_KEY` exists; `False` runs the legacy decoder only).
+3. **Config: `botCtl/private.py`** (not in the repo) - LLM/embedding access (`apiKey`, `baseUrl`, `embUrl`, `embMdl`, `lngMdl`) and, for SystemOne routing, `SYSONE_KEY`, `SYSONE_URL` (default `https://api.greenpt.ai/v1/systemone`), `SYSONE_MDL` (`metis`) plus the optional `SYSONE_ROUTING` switch (default: on when `SYSONE_KEY` exists or a non-default `SYSONE_URL` is set, e.g. a local Ollama SystemOne endpoint; `False` runs the legacy decoder only).
 4. **Secret: environment variable `STATE_TOKEN_SECRET`** (hex, e.g. `openssl rand -hex 16`) - seals the conversation state tokens. When unset, a random secret is used per process and state tokens do **not** survive a restart. Set it before starting the service (systemd unit, wrapper script or shell profile).
-5. **Generate data files**: run `python3 botCtl/makeDataFiles.py` once after checkout or whenever `rawData/` changes. It derives `botCtl/data/` files (`intents_raw.json`, `entity_*.json`, `feature_*.json`, `entity_bio.json`). The `options_*.json` files in `botCtl/data/` are hand-maintained and are never overwritten. `data/intents_metis.json` and `data/category_map.json` are hand-maintained Metis criteria (source files, not generated).
+5. **Generate data files**: run `python3 botCtl/makeDataFiles.py` once after checkout or whenever `rawData/` changes. It derives `botCtl/data/` files (`intents_raw.json`, `entity_*.json`, `feature_*.json`, `entity_bio.json`). The `options_*.json` files in `botCtl/data/` are hand-maintained and are never overwritten. `data/intents_sysone.json` and `data/category_map.json` are hand-maintained SystemOne criteria (source files, not generated).
 6. **Start**: `python3 botCtl/botCtl.py` runs the Flask app on `0.0.0.0:11354` (development mode; behind gunicorn/uwsgi for production). Optional: a `botCtl/startModels.sh` is executed in the background on the first request of a fresh session, if present (log: `botCtl/startModels.log`).
 7. **Reverse proxy** - external exposure is via Apache proxy settings pointing at port 11354.
-8. **Verify** - `python3 botCtl/metis_test.py` (needs `METIS_KEY`, hits the live endpoint) and `python3 botApiTest.py --scenario all` (spawns its own service child with a generated secret).
+8. **Verify** - `python3 botCtl/sysone_test.py` (needs `SYSONE_KEY` or a non-default `SYSONE_URL`, hits the live endpoint) and `python3 botApiTest.py --scenario all` (spawns its own service child with a generated secret).
 
 Runtime state: `botCtl/bot_history.db` (SQLite message log, auto-created).
 
@@ -23,7 +23,7 @@ Built into the service:
 
   * **Turn rate limit** - max 30 turns per session per minute (env
     `TURN_RATE_LIMIT`, 0 = off), HTTP 429 above. Each turn spends external
-    LLM/Metis credits, so unthrottled input can drain the account quota.
+    LLM/SystemOne credits, so unthrottled input can drain the account quota.
     Complement with Apache-side throttling (`mod_evasive` /
     `mod_security`) and a `LimitRequestBody`.
   * **Session format guard** - `session` must match `^[A-Za-z0-9_-]{1,64}$`
@@ -48,9 +48,10 @@ Data protection (DSGVO) notes:
     context in plaintext, plus session ids. It lives next to the code with
     OS-level access control only - restrict file permissions accordingly.
   * User input is sent to third-party services: the embedding/chat LLM
-    (entity arbiter, follow-up gate on the legacy path) and GreenPT Metis
-    (routing, EU endpoint). This must be covered by the privacy notice of
-    the site and a data processing agreement per provider.
+    (entity arbiter, follow-up gate on the legacy path) and the SystemOne
+    decision endpoint (routing; GreenPT EU endpoint by default, or a
+    self-hosted endpoint such as local Ollama). This must be covered by the
+    privacy notice of the site and a data processing agreement per provider.
   * `botCtl/private.py` holds API keys - keep it mode 600 and out of backups
     that are not encrypted.
 
@@ -103,6 +104,14 @@ expects 400; `--scenario foreign` sends session A's token under session B
 
 ## Metis routing (2026-10-24, branch `metis-decision-routing`)
 
+> **Renamed 2026-10-24**: the routing layer is now **SystemOne routing**
+> (`botSystemone.py`, `SystemoneRouter`, `SYSONE_*` config, `sysone_test.py`,
+> `data/intents_sysone.json`); OpenSpec change `rename-metis-to-systemone`.
+> The GreenPT decision model `metis` remains the default; other
+> SystemOne-compatible endpoints (e.g. a local Ollama server serving
+> `d3:2b`) are configurable via `SYSONE_URL`/`SYSONE_MDL`. The section below
+> is the original feature record under the old naming.
+
 New experimental intent routing using the GreenPT decision model **Metis**
 (`POST /v1/systemone`, EU endpoint, no text generation, probabilities only).
 It replaces the embedding decoder + LLM arbiter + LLM follow-up gate with
@@ -153,6 +162,9 @@ comes from `makeDataFiles.py`.
     example questions - real user behaviour is the missing measurement.
 
 ### Activation
+
+(Original activation record; keys are now `SYSONE_ROUTING`/`SYSONE_KEY`,
+test is now `sysone_test.py`.)
 
 `METIS_ROUTING` in `private.py` (default: **on** when `METIS_KEY` exists;
 set `METIS_ROUTING = False` for the legacy decoder). Any Metis error falls

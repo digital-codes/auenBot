@@ -81,11 +81,11 @@ A reply that reports unmatched input SHALL be phrased for the user.
 Internal message keys (e.g. `no_match_completion`) and developer
 placeholder strings (e.g. "Nichts gefunden... hier könnte ein
 Vorschlag kommen") SHALL NOT be sent as chat text.
-With Metis routing enabled, the transition decision between re-decode and
+With SystemOne routing enabled, the transition decision between re-decode and
 follow-up (whether an input continues the previous topic or starts a new
 one) SHALL come from the stage-1 followup/new_topic answers instead of the
 chat-LLM follow-up gate. The pending-completion capture rules are unchanged;
-the LLM follow-up gate is only used when Metis routing is disabled.
+the LLM follow-up gate is only used when SystemOne routing is disabled.
 
 #### Scenario: No-match reply text
 
