@@ -4,6 +4,67 @@ Migration from LUBW/NAZKA ChatBot KarlA
 
 # Status
 
+## Metis routing (2026-10-24, branch `metis-decision-routing`)
+
+New experimental intent routing using the GreenPT decision model **Metis**
+(`POST /v1/systemone`, EU endpoint, no text generation, probabilities only).
+It replaces the embedding decoder + LLM arbiter + LLM follow-up gate with
+one forward pass per turn:
+
+  * **Stage 1** decides the coarse intent (17 options: smalltalk, beleidigung,
+    bio_frage, nazka_info, anreise, ausstellungen, kinder, aktivitaeten,
+    essen, hunde, fuehrungen, barrierefreiheit, toiletten, wetter, messdaten,
+    expertise, fallback) *jointly* with three yes/no transition questions
+    (followup, new_topic, unrelated) about the same turn.
+  * **Stage 2** (bio questions only) decides the answer feature category:
+    *verhalten* (behaviour: Nahrung, Fortpflanzung, Lebensraum, Feinde, Rufe
+    ...), *eigenschaften* (properties: Größe, Gewicht, Erkennungsmerkmale,
+    Blütezeit ...) or *beschreibung* (description: Name, Name_sci, Familie,
+    Klasse, Ökologische Bedeutung ...). An undecided answer (top-2 margin
+    < 0.10 or confidence < 0.35) merges all categories and offers 2-3
+    feature options. Media rule: audio for verhalten, otherwise image.
+  * The 30 old `tp_*`/`tiere_*`/`pflanzen_*` feature intents collapse into
+    the single `bio_frage` intent; the German entity search (stem + fuzzy
+    matcher) stays in place as entity resolver and arbiter.
+  * Follow-ups ("und wie schwer wird er?") reuse the conversation focus
+    without an entity search; a confirmed topic switch clears it.
+
+New files: `botCtl/botMetis.py` (client + thresholds), `botCtl/data/intents_metis.json`
+(criteria descriptions, `bio_frage` record), `botCtl/data/category_map.json`
+(column groups), `botCtl/metis_test.py` (smoke test, live endpoint).
+The derived `data/entity_bio.json` (entity names across all three domains)
+comes from `makeDataFiles.py`.
+
+### Metis vs. legacy — measured comparison
+
+  * Intent accuracy: **89.3%** over 882 real example questions from the old
+    93 intents (4 batch iterations; "fair" score counting defensible
+    alternative routings ~90%). Legacy was never measured end-to-end.
+  * Follow-up vs. topic switch separated cleanly (0.96 / 0.92) - the weakest
+    part of the legacy pipeline (separate LLM gate).
+  * Latency/cost: 1 Metis call (non-bio) / 2 calls (bio) at ~70-200ms and
+    ~400 input tokens, vs. embedding call + mid-band chat-LLM arbiter on the
+    legacy path.
+  * Maintenance: 93 intents + 3687 vectors vs. 17 criteria texts - new cases
+    are one German sentence, not a re-embedding.
+  * Known blind spot: "dein Lieblingstier" (bot persona favourites) decodes
+    to bio_frage (31/882); legacy vectors caught it. To be answered by the
+    LLM persona path later.
+  * Trade-offs: external EU service (rate limit 600 req/5min per account,
+    fallback to legacy on outage is built in), model behaviour can change
+    with `impact.version`, and the 89.3% were measured on legacy-authored
+    example questions - real user behaviour is the missing measurement.
+
+### Activation
+
+`METIS_ROUTING` in `private.py` (default: **on** when `METIS_KEY` exists;
+set `METIS_ROUTING = False` for the legacy decoder). Any Metis error falls
+back to the legacy path per turn. Verified: `metis_test.py` 20/20 PASS and
+`botApiTest.py --scenario all` fully green (11 scenarios, 16 entity samples)
+against the Metis-on server. OpenSpec change: `openspec/changes/add-metis-decision-routing/`.
+Recommendation: keep the legacy path deployable, observe `bot_history.db`
+(`llm_used`, intent names) during a trial period before retiring anything.
+
 ## Current (2026-02-02)
 
 ### Front-End
